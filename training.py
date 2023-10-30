@@ -3,11 +3,19 @@ import torch
 import data
 
 class Metric:
-  mean_loss: float
-  accuracy: float
-  precision: float
-  recall: float
-  f1: float
+  mean_loss: float | None
+  accuracy: float | None
+  precision: float | None
+  recall: float | None
+  f1: float | None
+  def __init__(self):
+    self.mean_loss = None
+    self.accuracy = None
+    self.precision = None
+    self.recall = None
+    self.f1 = None
+  def __str__(self):
+    return f"mean_loss: {self.mean_loss}, accuracy: {self.accuracy}, precision: {self.precision}, recall: {self.recall}, f1: {self.f1}"
 
 def trainClassifier(
     model: models.ClassifierModule, train_dataloader: data.ClassDataLoader, val_dataloader: data.ClassDataLoader | None, 
