@@ -1,7 +1,5 @@
-from transformers import AutoModel, AutoTokenizer 
-import torch
 import glob
-from VnCoreNLPTokenizer import VnCoreNLPTokenizer
+from VnCoreNLP import VnCoreNLP
 import json
 import os
 from typing import TypedDict
@@ -19,8 +17,7 @@ class InputData:
   sentences_words: list[str]
   tokenized_words: list[str]
 
-def parseTrainDataset(data_path: str) -> list[(InputData, (bool, list[Label]))] :
-  tokenizer = VnCoreNLPTokenizer(jar_path='./dependencies/VnCoreNLP/VnCoreNLP.jar')
+def parseDataset(tokenizer: VnCoreNLP, data_path: str) -> list[(InputData, (bool, list[Label]))] :
   train_dataset = []
   cur_sentence = None
   cur_tokenized_sentences = None
@@ -58,7 +55,12 @@ def parseTrainDataset(data_path: str) -> list[(InputData, (bool, list[Label]))] 
             ))
             cur_label = []
           cur_sentence = line.split("\t")[1]
-          annotations = tokenizer.annotate(cur_sentence)
+          try:
+            annotations = tokenizer.annotate(cur_sentence)
+          except Exception as e:
+            print(file)
+            print(cur_sentence)
+            raise e
           cur_tokenized_sentences = []
           cur_tokenized_words = []
           for sentence_annotation in annotations:
@@ -112,3 +114,7 @@ def remapToTokenizedIndex(index: (int, int), original: list[str], tokenized: lis
     original_index += 1
   end = tokenized_index - 1
   return (begin, end)
+
+#remove all characters that are not alphabetic, numeric, or common punctuation
+#should be as fast as possible
+# def cleanText(text: str) -> str:
