@@ -1,0 +1,90 @@
+pair_tuple: tuple([(int, int)]*n) of (start, end) indices of sentences in dataset
+sent_col: list[str] of sentences in dataset 
+
+config = {
+  seed: 'random seed', type=int, default=2021)
+  batch: 'input data batch size', type=int, default=16)
+  epoch: 'the number of run times', type=int, default=25)
+  fold: 'the fold of data', type=int, default=5)
+
+  # lstm parameters setting
+  input_size: 'the size of encoder embedding', type=int, default=300)
+  hidden_size: 'the size of hidden embedding', type=int, default=512)
+  num_layers: 'the number of layer', type=int, default=2)
+
+  # program mode choose.
+  model_mode: 'bert or norm', default='bert')
+  server_type: '1080ti or rtx', default='1080ti')
+  program_mode: 'debug or run or test', default='run')
+  stage_model: 'first or second', default='first')
+  model_type: 'bert_crf, bert_crf_mtl', default='crf')
+  position_sys: 'BIES or BI or SPAN', default='BMES')
+
+  device: 'run program in device type',
+            default='cuda' if torch.cuda.is_available() else 'cpu')
+
+  dataset_name: 'the type of data set', default='phone')
+  premodel_path: 'the type of data set', default=None)
+
+  # model parameters.
+  embed_dropout: 'prob of embedding dropout', type=float, default=0.1)
+  factor: 'the type of data set', type=float, default=0.4)
+
+  # optimizer parameters.
+  bert_lr: 'the type of data set', type=float, default=2e-5)
+  linear_lr: 'the type of data set', type=float, default=2e-5)
+  crf_lr: 'the type of data set', type=float, default=0.01)
+
+  data_type: "vie"
+  path: {
+    dirname = dataset_name
+    standard_path = {"train":..., "test":..., "dev":...}
+    stanford_path: needn't
+    vncorenlp_path
+    bert_model_path: vinai/phobert-base-v2
+    glove_path: 
+    word2vec_path:
+  }
+
+  pre_process_data: {
+    "train":...
+    "test":...
+    "dev":...
+  }
+
+  val: {
+    elems = ["subject", "object", "aspect", "predicate"]
+    polarities = ["COM-", "EQL", "COM+", "None"]
+    polarity_dict = {
+      "COM-": -1,
+      "EQL": 0,
+      "COM+": 1,
+      "None": 0
+    }
+
+    if position_sys == "SPAN":
+        position_sys = []
+    else:
+        position_sys = list(position_sys)
+
+    norm_id_map: {
+      "O": 0,
+      "B": 1,
+      "M": 2,
+      "E": 3,
+    }
+
+    special_id_map: {
+      "O": 0,
+      "B-subject": 1,
+      "M-subject": 2,
+      "E-subject": 3,
+      "S-subject": 4,
+      "B-object": 5,
+    ...}
+
+    invert_norm_id_map = {0: "O", 1: "B", 2: "M", 3: "E"}
+    invert_special_id_map = {0: "O", 1: "B-subject", 2: "M-subject", 3: "E-subject", 4: "S-subject", 5: "B-object", ...}
+  }
+}
+ 

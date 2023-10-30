@@ -1,0 +1,1 @@
+java -Xmx2g -jar ./dependencies/VnCoreNLP/VnCoreNLP.jar 
