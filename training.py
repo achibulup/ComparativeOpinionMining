@@ -70,7 +70,7 @@ def trainOneEpochOrValidateClassifier(
 
   tp = confusion_matrix[1][1]
   fp = confusion_matrix[0][1]
-  fn = confusion_matrix[1][0]
+  fn = confusion_matrix[0][0]
 
   mt = Metric()
   mt.mean_loss = sum_loss / len(dataloader)
