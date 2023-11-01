@@ -47,11 +47,13 @@ def trainOneEpochOrValidateClassifier(
     input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = data
     outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
     is_comparative_prob, elem_output, sentence_class_prob = outputs
+
+    # print(elem_output)
     
     for i in range(batch_size):
       pred = float(is_comparative_prob[i]) >= 0.5
-      print(is_comparative_prob[i], ":", is_comp[i], ":", pred)
       is_correct = pred == bool(is_comp[i])
+      print(is_comparative_prob[i], ":", is_comp[i], ":", is_correct)
       if is_correct:
         corrects += 1
       confusion_matrix[is_correct][pred] += 1
@@ -74,25 +76,6 @@ def trainOneEpochOrValidateClassifier(
             ce = torch.nn.CrossEntropyLoss()
             (ce(sentence_class_prob[i], label[i]) / sum_positive).backward(retain_graph=True)
       optimizer.step()
-
-    # print(outputs)
-    # print(labels)
-  #   pred = torch.argmax(outputs, dim=1)
-  #   for i in range(len(pred)):
-  #     is_correct = int(labels[i][pred[i]])
-  #     corrects += is_correct
-  #     confusion_matrix[is_correct][pred[i]] += 1
-      
-  #   if do_train:
-  #     optimizer.zero_grad()
-
-  #   loss = loss_fn(outputs, labels)
-  #   sum_loss += loss.item()
-  #   # print(loss)
-    
-  #   if do_train:
-  #     loss.backward()
-  #     optimizer.step()
 
   tp = confusion_matrix[1][1]
   fp = confusion_matrix[0][1]
