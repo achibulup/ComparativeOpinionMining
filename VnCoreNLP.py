@@ -29,7 +29,7 @@ class VnCoreNLP(object):
     self._process.stdin.close()
     self._process.stdout.close()
     # wait a bit for the subprocess to exit
-    self._process.wait(timeout=0.8)
+    self._process.wait(timeout=1.5)
     if (self._process.poll() is None):
       self._process.kill()
 

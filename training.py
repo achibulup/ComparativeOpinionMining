@@ -1,6 +1,7 @@
 import models
 import torch
 import data
+from config import DEVICE, DO_TRAIN_PART1, DO_TRAIN_PART2
 
 class Metric:
   def __init__(self):
@@ -13,55 +14,85 @@ class Metric:
     return f"mean_loss: {self.mean_loss}, accuracy: {self.accuracy}, precision: {self.precision}, recall: {self.recall}, f1: {self.f1}"
 
 def trainClassifier(
-    model: models.BertCell, train_dataloader: data.ClassDataLoader, val_dataloader: data.ClassDataLoader | None, 
-    *, epochs: int = 10, optimizer = None, loss_fn = torch.nn.BCELoss(), metric_callback = None):
+    model: models.TheModel, train_dataloader: data.ClassDataLoader, val_dataloader: data.ClassDataLoader | None, 
+    *, epochs: int = 10, optimizer = None, metric_callback = None):
   optimizer = torch.optim.Adam(model.parameters(), lr=0.001) if optimizer is None else optimizer
   for i in range(epochs):
-    train_metric = trainOneEpochClassifier(model, train_dataloader, i, optimizer=optimizer, loss_fn=loss_fn)
+    train_metric = trainOneEpochClassifier(model, train_dataloader, i, optimizer=optimizer)
     if val_dataloader is not None:
-      val_metric = validateClassifier(model, val_dataloader, i, loss_fn=loss_fn)
+      val_metric = validateClassifier(model, val_dataloader, i)
     if metric_callback is not None:
       metric_callback(i, train_metric, val_metric)
 
 def trainOneEpochClassifier(
-      model: models.BertCell, train_dataloader: data.ClassDataLoader,
-      epoch_index: int = 0, *, optimizer = None, loss_fn = torch.nn.BCELoss()) -> Metric:
-  return trainOneEpochOrValidateClassifier(model, train_dataloader, do_train=True, optimizer=optimizer, loss_fn=loss_fn, epoch_index=epoch_index)
+      model: models.TheModel, train_dataloader: data.ClassDataLoader,
+      epoch_index: int = 0, *, optimizer = None) -> Metric:
+  return trainOneEpochOrValidateClassifier(model, train_dataloader, do_train=True, optimizer=optimizer, epoch_index=epoch_index)
 
 def validateClassifier(
-      model: models.BertCell, val_dataloader: data.ClassDataLoader,
-      epoch_index: int = 0, *, loss_fn = torch.nn.BCELoss()) -> Metric:
-  return trainOneEpochOrValidateClassifier(model, val_dataloader, do_train=False, loss_fn=loss_fn, epoch_index=epoch_index)
+      model: models.TheModel, val_dataloader: data.ClassDataLoader,
+      epoch_index: int = 0) -> Metric:
+  return trainOneEpochOrValidateClassifier(model, val_dataloader, do_train=False, epoch_index=epoch_index)
 
 def trainOneEpochOrValidateClassifier(
-    model: models.BertCell, dataloader: data.ClassDataLoader, do_train = True,
-    *, epoch_index: int = 0, optimizer = None, loss_fn = torch.nn.BCELoss()) -> Metric:
+    model: models.TheModel, dataloader: data.ClassDataLoader, do_train = True,
+    *, epoch_index: int = 0, optimizer = None) -> Metric:
   if do_train:
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001) if optimizer is None else optimizer
   sum_loss = 0
   corrects = 0
   confusion_matrix = [[0, 0], [0, 0]]
   for data in dataloader:
-    input_ids, attn_mask, labels = data
-    outputs = model(input_ids, attn_mask)
-    # print(outputs)
-    # print(labels)
-    pred = torch.argmax(outputs, dim=1)
-    for i in range(len(pred)):
-      is_correct = int(labels[i][pred[i]])
-      corrects += is_correct
-      confusion_matrix[is_correct][pred[i]] += 1
-      
-    if do_train:
-      optimizer.zero_grad()
-
-    loss = loss_fn(outputs, labels)
-    sum_loss += loss.item()
-    # print(loss)
+    batch_size = len(data[0])
+    input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = data
+    outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
+    is_comparative_prob, elem_output, sentence_class_prob = outputs
+    
+    for i in range(batch_size):
+      pred = float(is_comparative_prob[i]) >= 0.5
+      print(is_comparative_prob[i], ":", is_comp[i], ":", pred)
+      is_correct = pred == bool(is_comp[i])
+      if is_correct:
+        corrects += 1
+      confusion_matrix[is_correct][pred] += 1
+    # for i in range(batch_size):
+    #   print (sentence_class_prob[i], ":", int(label[i]))
+    #   print ("correct" if int(torch.argmax(sentence_class_prob[i])) == int(label[i]) else "wrong")
     
     if do_train:
-      loss.backward()
+      optimizer.zero_grad()
+      if DO_TRAIN_PART1:
+        is_comparative_cost = torch.nn.BCELoss()(is_comparative_prob[:,0], is_comp.float())
+        is_comparative_cost.backward(retain_graph=DO_TRAIN_PART2)
+      if DO_TRAIN_PART2:
+        sum_positive = float(torch.sum(is_comp))
+        for i in range(batch_size):
+          if is_comp[i]:
+            for elem in range(4):
+              elem_pred, elem_cost = elem_output[elem]
+              (elem_cost[i] / (4 * sum_positive)).backward(retain_graph=True)
+            ce = torch.nn.CrossEntropyLoss()
+            (ce(sentence_class_prob[i], label[i]) / sum_positive).backward(retain_graph=True)
       optimizer.step()
+
+    # print(outputs)
+    # print(labels)
+  #   pred = torch.argmax(outputs, dim=1)
+  #   for i in range(len(pred)):
+  #     is_correct = int(labels[i][pred[i]])
+  #     corrects += is_correct
+  #     confusion_matrix[is_correct][pred[i]] += 1
+      
+  #   if do_train:
+  #     optimizer.zero_grad()
+
+  #   loss = loss_fn(outputs, labels)
+  #   sum_loss += loss.item()
+  #   # print(loss)
+    
+  #   if do_train:
+  #     loss.backward()
+  #     optimizer.step()
 
   tp = confusion_matrix[1][1]
   fp = confusion_matrix[0][1]
