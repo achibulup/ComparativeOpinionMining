@@ -1,13 +1,17 @@
 import subprocess
 from typing import TypedDict
 
-Annotations = TypedDict("Annotations", {
-  "word_form": list[str],
-  "pos_tag": list[str],
-  "dep_label": list[str],
-  "dep_head": list[int],
-  "ner_tag": list[str],
-})
+class Annotations(TypedDict):
+  word_form: list[str] 
+  """vd ["Tôi", "là", "sinh_viên"]"""
+  pos_tag: list[str]
+  """vd ["Nc", "V", "N"]"""
+  dep_label: list[str]
+  """vd ["nsubj", "cop", "root"]"""
+  dep_head: list[int]
+  """vd [2, 0, -1]"""
+  ner_tag: list[str]
+  """vd ["O", "O", "O"]"""
 
 class VnCoreNLP(object):
   def __init__(self, jar_path):
