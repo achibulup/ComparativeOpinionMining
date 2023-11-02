@@ -18,21 +18,10 @@ class COMDataSet(data.Dataset):
   def __init__(self, data: list[tuple[InputData, LabelData]]):
     super(COMDataSet, self).__init__()
     self.data = data
-    self.tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
 
   def __getitem__(self, index: int):
-    inp, label = self.data[index]
-    encoded_input = self.tokenizer.encode(inp.tokenized_words)
-    annotations = inp.annotations
-    bmeo_mask_list : list[list[int]]= []
-    for elem in ELEMENTS_NO_LABEL:
-      if label.is_comparative:
-        bmeo_mask_list.append(label.quintuples[0][elem][1])
-      else:
-        bmeo_mask_list.append([0] * len(encoded_input))
-    return (encoded_input, annotations, 
-        label.is_comparative, bmeo_mask_list, label.quintuples[0]["label"] if label.is_comparative else None)
-
+    return self.data[index]
+    
   def __len__(self):
     return len(self.data)
   
@@ -70,30 +59,9 @@ class BalancedSampler(data.Sampler):
   def __len__(self):
     return len(self.dataset)
 
-def collate_fn(batch: list[tuple[
-        list[int], list[Annotations], bool, list[list[int]], int | None
-    ]]):
-  batch_size = len(batch)
-  input_ids, annotations, is_comp, elem_bmeo_masks, labels = zip(*batch)
-  max_len = max([len(input_id) for input_id in input_ids])
-  padded_input_ids = []
-  padded_elem_bmeo_masks = []
-  attn_masks = []
-  for i in range(batch_size):
-    this_len = len(input_ids[i])
-    num_padded = max_len - this_len
-    padded_input_ids.append(input_ids[i] + [0] * num_padded)
-    attn_masks.append([1] * this_len + [0] * num_padded)
-    padded_mask = [ori_mask + [0] * num_padded for ori_mask in elem_bmeo_masks[i]]
-    padded_elem_bmeo_masks.append(padded_mask)
-
-  input_ids = torch.tensor(padded_input_ids)
-  attn_masks = torch.tensor(attn_masks, dtype=torch.bool)
-  is_comp = torch.tensor(is_comp)
-  elem_bmeo_masks = torch.tensor(padded_elem_bmeo_masks)
-  labels = torch.tensor([label if label is not None else -1 for label in labels])
-  return input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels
+def identity(x):
+  return x
 
 class ClassDataLoader(data.DataLoader):
   def __init__(self, dataset: COMDataSet, batch_size: int, shuffle: bool = None, sampler: data.Sampler = None):
-    super(ClassDataLoader, self).__init__(dataset, batch_size, shuffle=shuffle, sampler=sampler, collate_fn=collate_fn)
+    super(ClassDataLoader, self).__init__(dataset, batch_size, shuffle=shuffle, sampler=sampler, collate_fn=identity)

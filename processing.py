@@ -5,6 +5,9 @@ import json
 import os
 from typing import TypedDict
 import problem_spec
+from problem_spec import ELEMENTS, ELEMENTS_NO_LABEL, LABELS
+import torch
+from transformers import PreTrainedTokenizer
 
 class InputData:
   def __init__(self, tokenized_sentences: list[str], sentences_words: list[str], tokenized_words: list[str], annotations: list[Annotations]):
@@ -73,7 +76,7 @@ def parseDataset(tokenizer: VnCoreNLP, data_path: str) -> list[tuple[InputData, 
               LabelData(cur_quintuples)
             ))
           sentence: str = getSentenceFromLine(line)
-          cur_input = mineInputSentence(tokenizer, sentence)
+          cur_input = mineInputSentence(sentence, tokenizer)
           cur_quintuples = []
 
         else: #quintuple line
@@ -99,7 +102,7 @@ def getSentenceFromLine(line: str) -> str:
   # the data is in the format of "untokenized_sentence \t tokenized_sentence"
   return line.split("\t")[1]
 
-def mineInputSentence(tokenizer: VnCoreNLP, sentence: str) -> InputData:
+def mineInputSentence(sentence: str, tokenizer: VnCoreNLP) -> InputData:
   """Populate the InputData object"""
   annotations = tokenizer.annotate(sentence)
   tokenized_sentences = []
@@ -137,7 +140,7 @@ def parseStartEndIndex(indexRangeArray: list[str]) -> tuple[int, int]:
     begin = int(indexRangeArray[0].split("&&")[0]) - 1
     end = int(indexRangeArray[-1].split("&&")[0]) - 1
     return (begin, end)
-  
+
 def remapToTokenizedIndex(index: tuple[int, int], original: list[str], tokenized: list[str]) -> tuple[int, int]:
   if index == (-1, -1):
     return index
@@ -155,7 +158,7 @@ def remapToTokenizedIndex(index: tuple[int, int], original: list[str], tokenized
     original_index += 1
   begin = tokenized_index
 
-  while original_index <= index[1]: # do the same thing
+  while original_index < index[1]: # do the same thing
     cur_token_match_len += len(original[original_index])
     if cur_token_match_len == len(tokenized[tokenized_index]):
       cur_token_match_len = 0
@@ -163,7 +166,7 @@ def remapToTokenizedIndex(index: tuple[int, int], original: list[str], tokenized
     else :
       cur_token_match_len += 1 # account for '_' character
     original_index += 1
-  end = tokenized_index - 1
+  end = tokenized_index
 
   return (begin, end)
 
@@ -180,12 +183,90 @@ def createBMEOMask(index: tuple[int, int], num_words: int) -> list[int]:
   result = [0] + result + [0]
   return result
 
+def decode(mask: list[int]) -> tuple[int, int]:
+  """[*O*, O, O, B, M, M, E, O,....,*O*] -> (2, 6) 
+  the mask include additional O at the beginning and end to account for the [CLS] and [SEP] tokens
+  """
+  begin = 0
+  end = 0
+  for i in range(len(mask)):
+    if mask[i] != 0:
+      if begin == 0:
+        begin = i
+      end = i
+  if end == len(mask) - 1:
+    end -= 1
+  return (begin - 1, end - 1)
+
 def mapLabelStrToInt(label: str) -> int:
   return problem_spec.LABELS.index(label)
 
 def mapLabelIntToStr(label: int) -> str:
   return problem_spec.LABELS[label]
 
-#remove all characters that are not alphabetic, numeric, or common punctuation
-#should be as fast as possible
-# def cleanText(text: str) -> str:
+
+
+
+
+
+
+
+
+
+
+def transformData(data: tuple[InputData, LabelData], tokenizer: PreTrainedTokenizer):
+    inp, label = data
+    encoded_input = tokenizer.encode(inp.tokenized_words)
+    annotations = inp.annotations
+    bmeo_mask_list : list[list[int]]= []
+    for elem in ELEMENTS_NO_LABEL:
+      if label.is_comparative:
+        bmeo_mask_list.append(label.quintuples[0][elem][1])
+      else:
+        bmeo_mask_list.append([0] * len(encoded_input))
+    return (encoded_input, annotations, 
+        label.is_comparative, bmeo_mask_list, label.quintuples[0]["label"] if label.is_comparative else None)
+
+def collate_fn(batch: list[tuple[
+        list[int], list[Annotations], bool, list[list[int]], int | None
+    ]]):
+  batch_size = len(batch)
+  input_ids, annotations, is_comp, elem_bmeo_masks, labels = zip(*batch)
+  max_len = max([len(input_id) for input_id in input_ids])
+  padded_input_ids = []
+  padded_elem_bmeo_masks = []
+  attn_masks = []
+  for i in range(batch_size):
+    this_len = len(input_ids[i])
+    num_padded = max_len - this_len
+    padded_input_ids.append(input_ids[i] + [0] * num_padded)
+    attn_masks.append([1] * this_len + [0] * num_padded)
+    padded_mask = [ori_mask + [0] * num_padded for ori_mask in elem_bmeo_masks[i]]
+    padded_elem_bmeo_masks.append(padded_mask)
+
+  input_ids = torch.tensor(padded_input_ids)
+  attn_masks = torch.tensor(attn_masks, dtype=torch.bool)
+  is_comp = torch.tensor(is_comp)
+  elem_bmeo_masks = torch.tensor(padded_elem_bmeo_masks)
+  labels = torch.tensor([label if label is not None else -1 for label in labels])
+  return input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels
+
+def transformBatch(batch: list[tuple[InputData, LabelData]], tokenizer: PreTrainedTokenizer):
+  return collate_fn([transformData(data, tokenizer) for data in batch])
+
+def detransformResult(result_tuple:tuple, lookup:list[tuple[InputData, LabelData]]) -> list:
+  batch_size = len(lookup)
+  is_comparative_prob, elem_output, sentence_class_prob = result_tuple
+  result = []
+  for i in range(batch_size):
+    is_comparative = bool(is_comparative_prob[i] >= 0.5)
+    elements = None
+    label = None
+    if is_comparative:
+      elements = dict()
+      for j, elem in enumerate(problem_spec.ELEMENTS_NO_LABEL):
+        index = decode(elem_output[j][0][i])
+        elements[elem] = lookup[i][0].tokenized_words[index[0]:index[1] + 1]
+      label = problem_spec.LABELS[int(torch.argmax(sentence_class_prob[i]))]
+    result.append((is_comparative, elements, label))
+  return result

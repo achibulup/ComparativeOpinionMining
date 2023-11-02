@@ -4,7 +4,6 @@ from transformers import AutoModel
 from torchcrf import CRF
 from VnCoreNLP import Annotations
 from problem_spec import ELEMENTS, ELEMENTS_NO_LABEL, LABELS
-from config import DEVICE
 
 BERT_HIDDEN_SIZE = 768
 
@@ -40,9 +39,9 @@ class TheModel(nn.Module):
     super(TheModel, self).__init__()
     self.bert = BertCell() if bert_model is None else bert_model
     self.identification = nn.Sequential(
-      nn.Linear(BERT_HIDDEN_SIZE, 321),
+      nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE // 2),
       nn.Sigmoid(),
-      nn.Linear(321, 1),
+      nn.Linear(BERT_HIDDEN_SIZE // 2, 1),
       nn.Sigmoid()
     )
     self.element_linear = nn.ModuleList()
