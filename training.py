@@ -10,7 +10,7 @@ from metric import MetricRecord, BinaryMetric, MultiClassMetric
 
 tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
 
-def predict(model: models.TheModel, sentence: str, nlptokenizer):
+def predict(model: models.TheModel, sentence: str, nlptokenizer) -> str:
   global tokenizer
   model.eval()
   processed_input = processing.mineInputSentence(sentence, nlptokenizer)
@@ -21,7 +21,7 @@ def predict(model: models.TheModel, sentence: str, nlptokenizer):
   outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
   is_comparative_prob, elem_output, sentence_class_prob = outputs
   transformed_output = processing.detransformResult(outputs, [(processed_input, dummy_label)])[0]
-  return transformed_output
+  return processing.formatResult(transformed_output, processed_input)
 
 def trainClassifier(
     model: models.TheModel, train_dataloader: data.ClassDataLoader, val_dataloader: data.ClassDataLoader | None, 

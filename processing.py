@@ -170,6 +170,35 @@ def remapToTokenizedIndex(index: tuple[int, int], original: list[str], tokenized
 
   return (begin, end)
 
+def mapToOriginalIndex(index: tuple[int, int], original: list[str], tokenized: list[str]) -> tuple[int, int]:
+  if index == (-1, -1):
+    return index
+  original_index = 0
+  tokenized_index = 0
+  cur_token_match_len = 0
+
+  while tokenized_index < index[0]:
+    cur_token_match_len += len(original[original_index])
+    if cur_token_match_len == len(tokenized[tokenized_index]):
+      cur_token_match_len = 0
+      tokenized_index += 1
+    else :
+      cur_token_match_len += 1 # account for '_' character
+    original_index += 1
+  begin = original_index
+
+  while tokenized_index < index[1]: # do the same thing
+    cur_token_match_len += len(original[original_index])
+    if cur_token_match_len == len(tokenized[tokenized_index]):
+      cur_token_match_len = 0
+      tokenized_index += 1
+    else :
+      cur_token_match_len += 1 # account for '_' character
+    original_index += 1
+  end = original_index
+
+  return (begin, end)
+
 def createBMEOMask(index: tuple[int, int], num_words: int) -> list[int]:
   """(2, 6) -> [*O*, O, O, B, M, M, E, O,....,*O*]
   the mask include additional O at the beginning and end to account for the [CLS] and [SEP] tokens
@@ -196,6 +225,7 @@ def decode(mask: list[int]) -> tuple[int, int]:
       end = i
   if end == len(mask) - 1:
     end -= 1
+  end += 1
   return (begin - 1, end - 1)
 
 def mapLabelStrToInt(label: str) -> int:
@@ -266,7 +296,20 @@ def detransformResult(result_tuple:tuple, lookup:list[tuple[InputData, LabelData
       elements = dict()
       for j, elem in enumerate(problem_spec.ELEMENTS_NO_LABEL):
         index = decode(elem_output[j][0][i])
-        elements[elem] = lookup[i][0].tokenized_words[index[0]:index[1] + 1]
+        elements[elem] = (lookup[i][0].tokenized_words[index[0]:index[1]], index)
       label = problem_spec.LABELS[int(torch.argmax(sentence_class_prob[i]))]
     result.append((is_comparative, elements, label))
   return result
+
+def formatResult(result: tuple[bool, dict[str, tuple[list[str], tuple[int, int]]] | None, str | None], 
+                 lookup: InputData) -> str | None:
+  is_comparative, elements, label = result
+  if not is_comparative:
+    return None
+  else:
+    result_dict = dict()
+    for elem in elements.keys():
+      index = mapToOriginalIndex(elements[elem][1], lookup.sentences_words, lookup.tokenized_words)
+      result_dict[elem] = [str(i+1)+"&&"+lookup.sentences_words[i] for i in range(index[0], index[1])]
+    result_dict["label"] = label
+    return json.dumps(result_dict, ensure_ascii=False)
