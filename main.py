@@ -47,10 +47,10 @@ if __name__ == '__main__':
 
   model = models.TheModel().to(config.DEVICE)
   if config.LOAD_MODEL:
-    if os.path.exists(config.SAVE_MODEL_PATH):
-      model.load_state_dict(torch.load(config.SAVE_MODEL_PATH))
+    if os.path.exists(config.LOAD_MODEL_PATH):
+      model.load_state_dict(torch.load(config.LOAD_MODEL_PATH))
     else:
-      raise Exception("Model path: " + config.SAVE_MODEL_PATH + " does not exist")
+      raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
 
   max_f1 = 0
   def process_metric(epoch, train, val):
