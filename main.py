@@ -12,7 +12,6 @@ import torch
 import argparse
 import numpy as np
 from torchcrf import CRF
-from dotenv import load_dotenv
 from transformers import AutoTokenizer, AutoModel
 
 if __name__ == '__main__':
