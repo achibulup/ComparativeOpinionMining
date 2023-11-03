@@ -98,7 +98,7 @@ def trainOneEpochOrValidateClassifier(
 
     
     #weight=torch.tensor([0.9, 1.1]))
-    ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562]))
+    ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562]).to(config.DEVICE))
     
     if do_train:
       optimizer.zero_grad()
@@ -106,7 +106,7 @@ def trainOneEpochOrValidateClassifier(
     weight=[]
     for i in range(batch_size):
       weight.append(1.2 if is_comp[i] else 0.8) 
-    comp_loss_fn = torch.nn.BCELoss(torch.tensor(weight))      
+    comp_loss_fn = torch.nn.BCELoss(torch.tensor(weight).to(config.DEVICE))      
     is_comparative_cost = comp_loss_fn(is_comparative_prob[:,0], is_comp.float())
     g_sum_loss += is_comparative_cost.item()
     if do_train and config.DO_TRAIN_PART1:

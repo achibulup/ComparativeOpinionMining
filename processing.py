@@ -8,6 +8,7 @@ import problem_spec
 from problem_spec import ELEMENTS, ELEMENTS_NO_LABEL, LABELS
 import torch
 from transformers import PreTrainedTokenizer
+import config
 
 class InputData:
   def __init__(self, tokenized_sentences: list[str], sentences_words: list[str], tokenized_words: list[str], annotations: list[Annotations]):
@@ -274,11 +275,11 @@ def collate_fn(batch: list[tuple[
     padded_mask = [ori_mask + [0] * num_padded for ori_mask in elem_bmeo_masks[i]]
     padded_elem_bmeo_masks.append(padded_mask)
 
-  input_ids = torch.tensor(padded_input_ids)
-  attn_masks = torch.tensor(attn_masks, dtype=torch.bool)
-  is_comp = torch.tensor(is_comp)
-  elem_bmeo_masks = torch.tensor(padded_elem_bmeo_masks)
-  labels = torch.tensor([label if label is not None else -1 for label in labels])
+  input_ids = torch.tensor(padded_input_ids).to(config.DEVICE)
+  attn_masks = torch.tensor(attn_masks, dtype=torch.bool).to(config.DEVICE)
+  is_comp = torch.tensor(is_comp).to(config.DEVICE)
+  elem_bmeo_masks = torch.tensor(padded_elem_bmeo_masks).to(config.DEVICE)
+  labels = torch.tensor([label if label is not None else -1 for label in labels]).to(config.DEVICE)
   return input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels
 
 def transformBatch(batch: list[tuple[InputData, LabelData]], tokenizer: PreTrainedTokenizer):
