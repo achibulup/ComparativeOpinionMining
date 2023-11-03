@@ -48,10 +48,7 @@ class TheModel(nn.Module):
     for i in range(4):
       self.element_linear.append(nn.Linear(BERT_HIDDEN_SIZE, len("BMEO")))
     self.label_linear = torch.nn.Sequential(
-      torch.nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE // 2),
-      nn.Sigmoid(),
-      nn.Linear(BERT_HIDDEN_SIZE // 2, len(LABELS)),
-      nn.Sigmoid()
+      torch.nn.Linear(BERT_HIDDEN_SIZE, len(LABELS)),
     )
     self.crf = nn.ModuleList()
     for i in range(4):
