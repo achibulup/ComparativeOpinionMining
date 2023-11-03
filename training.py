@@ -123,8 +123,8 @@ def trainOneEpochOrValidateClassifier(
     if sum_loss is not None:
       sum_loss = sum_loss / (sum_positive * 4)
       g_sum_loss += sum_loss.item()
-    if do_train and config.DO_TRAIN_PART2:
-      sum_loss.backward()
+      if do_train and config.DO_TRAIN_PART2:
+        sum_loss.backward()
 
     if do_train:
       optimizer.step()
