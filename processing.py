@@ -223,10 +223,11 @@ def decode(mask: list[int]) -> tuple[int, int]:
     if mask[i] != 0:
       if begin == 0:
         begin = i
-      end = i
-  if end == len(mask) - 1:
+      end = i + 1
+  if (begin == 0):
+    return (-1, -1)
+  if end == len(mask):
     end -= 1
-  end += 1
   return (begin - 1, end - 1)
 
 def mapLabelStrToInt(label: str) -> int:
