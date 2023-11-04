@@ -134,4 +134,4 @@ def trainOneEpochOrValidateClassifier(
  
   avg_loss = g_sum_loss / len(dataloader.dataset)
 
-  return g_sum_loss, bin_class_metric, class_metrics
+  return avg_loss, bin_class_metric, class_metrics
