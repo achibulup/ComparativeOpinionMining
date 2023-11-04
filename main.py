@@ -50,7 +50,7 @@ if __name__ == '__main__':
     model = models.TheModel().to(config.DEVICE)
     if config.LOAD_MODEL:
       if os.path.exists(config.LOAD_MODEL_PATH):
-        model.load_state_dict(torch.load(config.LOAD_MODEL_PATH))
+        model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
       else:
         raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
 
@@ -74,6 +74,16 @@ val metric: ({val[0]}, {val[1]}, {val[2]})
       raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
     with VnCoreNLP(config.VNCORENLP_JAR_PATH) as vncorenlp:
       generate_result.generateResult(test_data_path, result_path, model=model, vncorenlp=vncorenlp)
+  elif config.MODE == "demo":
+    vncorenlp = VnCoreNLP(config.VNCORENLP_JAR_PATH)
+    model = models.TheModel().to(config.DEVICE)
+    if config.LOAD_MODEL:
+      if os.path.exists(config.LOAD_MODEL_PATH):
+        model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
+      else:
+        raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
+  else:
+    raise Exception("Invalid mode")
 
 else:
   raise Exception("This file was not created to be imported")

@@ -19,7 +19,6 @@ def predict(model: models.TheModel, sentence: str, nlptokenizer) -> str:
   input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
 
   outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
-  is_comparative_prob, elem_output, sentence_class_prob = outputs
   transformed_output = processing.detransformResult(outputs, [(processed_input, dummy_label)])[0]
   return processing.formatResult(transformed_output, processed_input)
 
