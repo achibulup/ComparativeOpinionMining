@@ -139,7 +139,7 @@ def parseStartEndIndex(indexRangeArray: list[str]) -> tuple[int, int]:
     return (-1, -1)
   else:
     begin = int(indexRangeArray[0].split("&&")[0]) - 1
-    end = int(indexRangeArray[-1].split("&&")[0]) - 1
+    end = int(indexRangeArray[-1].split("&&")[0])
     return (begin, end)
 
 def remapToTokenizedIndex(index: tuple[int, int], original: list[str], tokenized: list[str]) -> tuple[int, int]:
