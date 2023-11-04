@@ -8,6 +8,7 @@ BATCH_SIZE: int
 EPOCHS: int
 SEED: int
 POSTIVE_RATE: float
+LOG_PROGRESS: bool
 LR: float
 BINARY_WEIGHT: float
 VNCORENLP_JAR_PATH: str
@@ -29,6 +30,7 @@ def makeParser():
   parser.add_argument("--seed", help="random seed", type=int, default=999)
   parser.add_argument("--do_train_part1", help="whether to train part 1", type=bool, default=True)
   parser.add_argument("--do_train_part2", help="whether to train part 2", type=bool, default=True)
+  parser.add_argument("--log_progress", help="whether to log progress", type=bool, default=True)
   parser.add_argument("--vncorenlp_path", help="path to vncorenlp jar file", type=str, default="dependencies/VnCoreNLP/VnCoreNLP.jar")
   parser.add_argument("--data_path", help="path to data folder, which should contain train and dev subfolder containing .txt data files", type=str, default="data/VLSP2023/")
   parser.add_argument("--device", help="device to run on", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
@@ -40,7 +42,7 @@ def makeParser():
   return parser
 
 def loadConfig(args):
-  global MODE, DO_TRAIN_PART1, DO_TRAIN_PART2, BATCH_SIZE, EPOCHS, SEED, POSTIVE_RATE, LR, BINARY_WEIGHT, VNCORENLP_JAR_PATH, DATA_PATH, DEVICE, SAVE_MODEL, LOAD_MODEL, LOAD_MODEL_PATH, SAVE_MODEL_PATH
+  global MODE, DO_TRAIN_PART1, DO_TRAIN_PART2, BATCH_SIZE, EPOCHS, SEED, LOG_PROGRESS, POSTIVE_RATE, LR, BINARY_WEIGHT, VNCORENLP_JAR_PATH, DATA_PATH, DEVICE, SAVE_MODEL, LOAD_MODEL, LOAD_MODEL_PATH, SAVE_MODEL_PATH
   if args.mode not in ["train", "demo", "result"]:
     raise Exception("Invalid mode")
   MODE = args.mode
@@ -48,6 +50,7 @@ def loadConfig(args):
   DATA_PATH = args.data_path
   DEVICE = torch.device(args.device)
   SEED = args.seed
+  LOG_PROGRESS = args.log_progress
   SAVE_MODEL = args.save_model
   LOAD_MODEL = args.load_model
   if MODE == "result":
