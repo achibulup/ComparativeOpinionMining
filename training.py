@@ -84,7 +84,8 @@ def trainOneEpochOrValidateClassifier(
       # print(is_comparative_prob[i].item(), ":", is_comp[i], ":", is_correct)
       bin_class_metric.addSample(is_correct, pred)
       is_comp_corrects += int(is_correct)
-    print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
+    if config.LOG_PROGRESS:
+      print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
     
     class_corrects = 0
     for i in range(batch_size):
@@ -94,7 +95,8 @@ def trainOneEpochOrValidateClassifier(
         class_metrics.addSample(actual, pred)
         if pred == actual:
           class_corrects += 1
-    print("class_corrects:", class_corrects, "/", sum_positive)
+    if config.LOG_PROGRESS:
+      print("class_corrects:", class_corrects, "/", sum_positive)
 
     
     #weight=torch.tensor([0.9, 1.1]))
