@@ -69,7 +69,7 @@ val metric: ({val[0]}, {val[1]}, {val[2]})
   elif config.MODE == "result":
     model = models.TheModel().to(config.DEVICE)
     if os.path.exists(config.LOAD_MODEL_PATH):
-      model.load_state_dict(torch.load(config.LOAD_MODEL_PATH))
+      model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
     else:
       raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
     with VnCoreNLP(config.VNCORENLP_JAR_PATH) as vncorenlp:
