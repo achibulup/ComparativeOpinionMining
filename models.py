@@ -14,27 +14,25 @@ class BertCell(nn.Module):
 
   def forward(self, input_ids: list[list[int]], attn_mask: list[list[int]]):
     with torch.no_grad():
-      sequence_output, pooled_output = self.bert(input_ids, attention_mask=attn_mask)[:2]
-    return sequence_output, pooled_output
+      return self.bert(input_ids, attention_mask=attn_mask)[:2]
   
 class CRFCell(nn.Module):
   def __init__(self, num_tags: int):
     super(CRFCell, self).__init__()
     self.crf = CRF(num_tags, batch_first=True)
 
-  def forward(self, input_ids: list[list[list[int]]], 
-              attn_mask: list[list[int]], bmeo_mask_target: list[list[int]] | None):
-    result = self.crf.decode(input_ids, mask=attn_mask)
-    loss = None
-    if bmeo_mask_target is not None:
-      loss = self.crf(input_ids, bmeo_mask_target, mask=attn_mask, reduction="none").neg()
-    return result, loss
+  def forward(self, input_ids: list[list[list[int]]], attn_mask: list[list[int]]):
+    return self.crf.decode(input_ids, mask=attn_mask)
+  
+  def loss(self, input_ids: list[list[list[int]]], 
+              attn_mask: list[list[int]], bmeo_mask_target: list[list[int]]):
+    return self.crf(input_ids, bmeo_mask_target, mask=attn_mask, reduction="none").neg()
   
 
-class TheModel(nn.Module):
+class BertCrfCell(nn.Module):
   def __init__(self, bert_model = None):
     global BERT_HIDDEN_SIZE
-    super(TheModel, self).__init__()
+    super(BertCrfCell, self).__init__()
     self.bert = BertCell() if bert_model is None else bert_model
     self.identification = nn.Sequential(
       nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE // 2),
@@ -64,7 +62,8 @@ class TheModel(nn.Module):
     elem_output = []
     for index in range(4):
       if elem_bmeo_mask is None:
-        elem_output.append(self.crf[index](element_prob[index], attn_mask, None))
+        elem_output.append((self.crf[index](element_prob[index], attn_mask), None))
       else:
-        elem_output.append(self.crf[index](element_prob[index], attn_mask, elem_bmeo_mask[:, index, :]))
+        elem_output.append((self.crf[index](element_prob[index], attn_mask), 
+            self.crf[index].loss(element_prob[index], attn_mask, elem_bmeo_mask[:, index, :])))
     return is_comparative_prob, elem_output, sentence_class_prob

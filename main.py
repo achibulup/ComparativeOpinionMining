@@ -47,7 +47,7 @@ if __name__ == '__main__':
     train_dataloader = data.ClassDataLoader(train_dataset, config.BATCH_SIZE, sampler=data.BalancedSampler(train_dataset, positive_rate=config.POSTIVE_RATE, seed=config.SEED))
     val_dataloader = data.ClassDataLoader(val_dataset, 16)
 
-    model = models.TheModel().to(config.DEVICE)
+    model = models.BertCrfCell().to(config.DEVICE)
     if config.LOAD_MODEL:
       if os.path.exists(config.LOAD_MODEL_PATH):
         model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
@@ -67,7 +67,7 @@ val metric: ({val[0]}, {val[1]}, {val[2]})
     training.trainClassifier(model, train_dataloader, val_dataloader, epochs=config.EPOCHS, metric_callback=process_metric)
 
   elif config.MODE == "result":
-    model = models.TheModel().to(config.DEVICE)
+    model = models.BertCrfCell().to(config.DEVICE)
     if os.path.exists(config.LOAD_MODEL_PATH):
       model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
     else:
@@ -76,7 +76,7 @@ val metric: ({val[0]}, {val[1]}, {val[2]})
       generate_result.generateResult(test_data_path, result_path, model=model, vncorenlp=vncorenlp)
   elif config.MODE == "demo":
     vncorenlp = VnCoreNLP(config.VNCORENLP_JAR_PATH)
-    model = models.TheModel().to(config.DEVICE)
+    model = models.BertCrfCell().to(config.DEVICE)
     if config.LOAD_MODEL:
       if os.path.exists(config.LOAD_MODEL_PATH):
         model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))

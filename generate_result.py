@@ -5,7 +5,7 @@ import processing
 
 import os
 
-def generateResult(test_folder: str, result_folder: str, model: models.TheModel, vncorenlp: VnCoreNLP.VnCoreNLP):
+def generateResult(test_folder: str, result_folder: str, model: models.BertCrfCell, vncorenlp: VnCoreNLP.VnCoreNLP):
   print(processing.globDataFiles(test_folder))
   for file in processing.globDataFiles(test_folder):
     with open(file, 'r', encoding="utf-8") as input_file:

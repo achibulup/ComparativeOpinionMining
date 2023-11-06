@@ -276,17 +276,17 @@ def transformData(data: tuple[InputData, LabelData], tokenizer: PreTrainedTokeni
       else:
         bmeo_mask_list.append([0] * len(encoded_input))
     return (encoded_input, annotations, 
-        label.is_comparative, bmeo_mask_list, label.quintuples[0]["label"] if label.is_comparative else None)
+        label.is_comparative, bmeo_mask_list, label.quintuples[0]["label"] if label.is_comparative else -1)
 
 def collate_fn(batch: list[tuple[
-        list[int], list[Annotations], bool, list[list[int]], int | None
+        list[int], list[Annotations], bool, list[list[int]], int
     ]]):
   batch_size = len(batch)
   input_ids, annotations, is_comp, elem_bmeo_masks, labels = zip(*batch)
   max_len = max([len(input_id) for input_id in input_ids])
   padded_input_ids = []
   padded_elem_bmeo_masks = []
-  attn_masks = []
+  attn_masks: list[list[int]] = []
   for i in range(batch_size):
     this_len = len(input_ids[i])
     num_padded = max_len - this_len
@@ -294,35 +294,42 @@ def collate_fn(batch: list[tuple[
     attn_masks.append([1] * this_len + [0] * num_padded)
     padded_mask = [ori_mask + [0] * num_padded for ori_mask in elem_bmeo_masks[i]]
     padded_elem_bmeo_masks.append(padded_mask)
+  return padded_input_ids, attn_masks, annotations, is_comp, padded_elem_bmeo_masks, labels
 
-  input_ids = torch.tensor(padded_input_ids).to(config.DEVICE)
+def toTensor(batch: tuple[
+        list[list[int]], list[list[int]], list[list[Annotations]], list[bool], list[list[list[int]]], list[int]
+    ]):
+  input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels = batch
+  input_ids = torch.tensor(input_ids).to(config.DEVICE)
   attn_masks = torch.tensor(attn_masks, dtype=torch.bool).to(config.DEVICE)
   is_comp = torch.tensor(is_comp).to(config.DEVICE)
-  elem_bmeo_masks = torch.tensor(padded_elem_bmeo_masks).to(config.DEVICE)
-  labels = torch.tensor([label if label is not None else -1 for label in labels]).to(config.DEVICE)
+  elem_bmeo_masks = torch.tensor(elem_bmeo_masks).to(config.DEVICE)
+  labels = torch.tensor(labels).to(config.DEVICE)
   return input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels
 
 def transformBatch(batch: list[tuple[InputData, LabelData]], tokenizer: PreTrainedTokenizer):
-  return collate_fn([transformData(data, tokenizer) for data in batch])
+  return toTensor(collate_fn([transformData(data, tokenizer) for data in batch]))
 
-def detransformResult(result_tuple:tuple, lookup:list[tuple[InputData, LabelData]]) -> list:
-  batch_size = len(lookup)
+
+def part1Postprocess(result_tuple:tuple) -> list:
   is_comparative_prob, elem_output, sentence_class_prob = result_tuple
+  batch_size = len(is_comparative_prob)
   result = []
   for i in range(batch_size):
     is_comparative = bool(is_comparative_prob[i] >= 0.5)
     elements = None
-    label = None
+    label = -1
     if is_comparative:
       elements = dict()
       for j, elem in enumerate(problem_spec.ELEMENTS_NO_LABEL):
-        index = decode(elem_output[j][0][i])
-        elements[elem] = (lookup[i][0].tokenized_words[index[0]:index[1]], index)
-      label = problem_spec.LABELS[int(torch.argmax(sentence_class_prob[i]))]
+        elem_masks, elem_costs = elem_output[j]
+        index = decode(elem_masks[i])
+        elements[elem] = index
+      label = int(torch.argmax(sentence_class_prob[i]))
     result.append((is_comparative, elements, label))
   return result
 
-def formatResult(result: tuple[bool, dict[str, tuple[list[str], tuple[int, int]]] | None, str | None], 
+def formatResult(result: tuple[bool, dict[str, tuple[int, int]] | None, int | None], 
                  lookup: InputData) -> str | None:
   is_comparative, elements, label = result
   if not is_comparative:
@@ -330,7 +337,7 @@ def formatResult(result: tuple[bool, dict[str, tuple[list[str], tuple[int, int]]
   else:
     result_dict = dict()
     for elem in elements.keys():
-      index = mapToOriginalIndex(elements[elem][1], lookup.sentences_words, lookup.tokenized_words)
+      index = mapToOriginalIndex(elements[elem], lookup.sentences_words, lookup.tokenized_words)
       result_dict[elem] = [str(i+1)+"&&"+lookup.sentences_words[i] for i in range(index[0], index[1])]
-    result_dict["label"] = label
+    result_dict["label"] = problem_spec.LABELS[label] if label != -1 else None
     return json.dumps(result_dict, ensure_ascii=False)
