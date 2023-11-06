@@ -219,16 +219,35 @@ def decode(mask: list[int]) -> tuple[int, int]:
   """
   begin = 0
   end = 0
-  for i in range(len(mask)):
+  for i in range(len(mask) - 1):
     if mask[i] != 0:
       if begin == 0:
         begin = i
       end = i + 1
   if (begin == 0):
     return (-1, -1)
-  if end == len(mask):
-    end -= 1
   return (begin - 1, end - 1)
+
+def decodeList(mask: list[int]) -> list[tuple[int, int]]:
+  """[*O*, O, B, E, O, B, M, E, O,....,*O*] -> [(1, 3), (4, 7)]
+  the mask include additional O at the beginning and end to account for the [CLS] and [SEP] tokens
+  """
+  result = []
+  begin = None
+  end = None
+  for i in range(len(mask) - 1):
+    if mask[i] != 0:
+      if begin is None:
+        begin = i
+      end = i + 1
+    else:
+      if begin != 0:
+        result.append((begin - 1, end - 1))
+        begin = None
+        end = None
+  if begin != 0:
+    result.append((-1, -1))
+  return result
 
 def mapLabelStrToInt(label: str) -> int:
   return problem_spec.LABELS.index(label)

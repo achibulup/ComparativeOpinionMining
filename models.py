@@ -11,8 +11,6 @@ class BertCell(nn.Module):
   def __init__(self):
     super(BertCell, self).__init__()
     self.bert = AutoModel.from_pretrained("vinai/phobert-base-v2")
-    # self.dense = nn.Linear(768, 2)
-    # self.softmax = nn.Softmax(dim=1)
 
   def forward(self, input_ids: list[list[int]], attn_mask: list[list[int]]):
     with torch.no_grad():
@@ -47,7 +45,7 @@ class TheModel(nn.Module):
     self.element_linear = nn.ModuleList()
     for i in range(4):
       self.element_linear.append(nn.Linear(BERT_HIDDEN_SIZE, len("BMEO")))
-    self.label_linear = torch.nn.Sequential(
+    self.label_from_sentence_linear = torch.nn.Sequential(
       torch.nn.Linear(BERT_HIDDEN_SIZE, len(LABELS)),
     )
     self.crf = nn.ModuleList()
@@ -62,18 +60,11 @@ class TheModel(nn.Module):
     # class_embedding = self.embedding_dropout(pooled_output)
     is_comparative_prob = self.identification(pooled_output)
     element_prob = [w(token_embedding) for w in self.element_linear]
-    sentence_class_prob = self.label_linear(pooled_output)
+    sentence_class_prob = self.label_from_sentence_linear(pooled_output)
     elem_output = []
     for index in range(4):
       if elem_bmeo_mask is None:
         elem_output.append(self.crf[index](element_prob[index], attn_mask, None))
       else:
         elem_output.append(self.crf[index](element_prob[index], attn_mask, elem_bmeo_mask[:, index, :]))
-    # elem_output = torch.cat(elem_output, dim=0).view(3, batch_size, sequence_length).permute(1, 0, 2)
-    # elem_feature = element_prob
-    # elem_feature = [elem_feature[index].unsqueeze(0) for index in range(len(elem_feature))]
     return is_comparative_prob, elem_output, sentence_class_prob
-
-# _, sent_output = torch.max(torch.softmax(sent_class_prob, dim=1), dim=1)
-# sent_loss = F.cross_entropy(is_comparative_prob, comparative_label.view(-1))
-# crf_loss = sum(elem_output)
