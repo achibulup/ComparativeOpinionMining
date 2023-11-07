@@ -1,6 +1,7 @@
 import torch
 import argparse
 
+IS_PROTOTYPE: bool = False
 MODE: str
 DO_TRAIN_PART1: bool
 DO_TRAIN_PART2: bool
@@ -21,6 +22,7 @@ SAVE_MODEL_PATH: str
 
 def makeParser():
   parser = argparse.ArgumentParser()
+  parser.add_argument("--prototype", help="whether to use prototype", action=argparse.BooleanOptionalAction, default=False)
   parser.add_argument("--mode", help="'train' or 'demo' or 'result'", type=str, default="train")
   parser.add_argument("--batch-size", help="batch size", type=int, default=16)
   parser.add_argument("--epochs", help="number of epochs", type=int, default=20)
@@ -28,8 +30,8 @@ def makeParser():
   parser.add_argument("--lr", help="learning rate", type=float, default=0.001)
   parser.add_argument("--binary-weight", help="weight ratio for binary classification", type=float, default=1.2/0.8)
   parser.add_argument("--seed", help="random seed", type=int, default=999)
-  parser.add_argument("--do-train-part1", help="whether to train part 1", type=bool, default=True)
-  parser.add_argument("--do-train-part2", help="whether to train part 2", type=bool, default=True)
+  parser.add_argument("--do-train-part1", help="whether to train part 1", action=argparse.BooleanOptionalAction, default=True)
+  parser.add_argument("--do-train-part2", help="whether to train part 2", action=argparse.BooleanOptionalAction, default=True)
   parser.add_argument("--log-progress", help="whether to log ...", default=True, action=argparse.BooleanOptionalAction)
   parser.add_argument("--vncorenlp-path", help="path to vncorenlp jar file", type=str, default="dependencies/VnCoreNLP/VnCoreNLP.jar")
   parser.add_argument("--data-path", help="path to data folder, which should contain train and dev subfolder containing .txt data files", type=str, default="data/VLSP2023/")
@@ -42,9 +44,10 @@ def makeParser():
   return parser
 
 def loadConfig(args):
-  global MODE, DO_TRAIN_PART1, DO_TRAIN_PART2, BATCH_SIZE, EPOCHS, SEED, LOG_PROGRESS, POSTIVE_RATE, LR, BINARY_WEIGHT, VNCORENLP_JAR_PATH, DATA_PATH, DEVICE, SAVE_MODEL, LOAD_MODEL, LOAD_MODEL_PATH, SAVE_MODEL_PATH
+  global IS_PROTOTYPE, MODE, DO_TRAIN_PART1, DO_TRAIN_PART2, BATCH_SIZE, EPOCHS, SEED, LOG_PROGRESS, POSTIVE_RATE, LR, BINARY_WEIGHT, VNCORENLP_JAR_PATH, DATA_PATH, DEVICE, SAVE_MODEL, LOAD_MODEL, LOAD_MODEL_PATH, SAVE_MODEL_PATH
   if args.mode not in ["train", "demo", "result"]:
     raise Exception("Invalid mode")
+  IS_PROTOTYPE = args.prototype
   MODE = args.mode
   VNCORENLP_JAR_PATH = args.vncorenlp_path
   DATA_PATH = args.data_path
