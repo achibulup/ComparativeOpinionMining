@@ -19,9 +19,9 @@ if __name__ == '__main__':
   torch.manual_seed(config.SEED)
   np.random.seed(config.SEED)
 
-  train_data_path = config.DATA_PATH + "train/"
-  val_data_path = config.DATA_PATH + "val/"
-  test_data_path = config.DATA_PATH + "test/"
+  train_data_path = config.DATA_PATH + "train/" + ("train_0001.txt" if config.IS_PROTOTYPE else "")
+  val_data_path = config.DATA_PATH + "val/" + ("dev_0001.txt" if config.IS_PROTOTYPE else "")
+  test_data_path = config.DATA_PATH + "test/" + ("test_0001.txt" if config.IS_PROTOTYPE else "")
   result_path = config.DATA_PATH + "result/"
   
   if config.MODE == "train":
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     train_dataloader = data.ClassDataLoader(train_dataset, config.BATCH_SIZE, sampler=data.BalancedSampler(train_dataset, positive_rate=config.POSTIVE_RATE, seed=config.SEED))
     val_dataloader = data.ClassDataLoader(val_dataset, 16)
 
-    model = models.BertCrfCell().to(config.DEVICE)
+    model = models.BertCrfExtractor().to(config.DEVICE)
     if config.LOAD_MODEL:
       if os.path.exists(config.LOAD_MODEL_PATH):
         model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
@@ -58,8 +58,8 @@ if __name__ == '__main__':
     def process_metric(epoch, train, val):
       global max_f1
       print(f"""{{Epoch {epoch}: 
-train metric: ({train[0]}, {train[1]}, {train[2]})
-val metric: ({val[0]}, {val[1]}, {val[2]})
+train metric: ({train[0]}, {train[1]})
+val metric: ({val[0]}, {val[1]})
 }}""")
       if (config.SAVE_MODEL and val[1].f1 is not None and val[1].f1 > max_f1):
         torch.save(model.state_dict(), config.SAVE_MODEL_PATH)

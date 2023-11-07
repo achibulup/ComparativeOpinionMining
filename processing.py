@@ -1,14 +1,16 @@
-import glob
+import config
+import problem_spec
 from VnCoreNLP import VnCoreNLP
 from VnCoreNLP import Annotations
-import json
-import os
-from typing import TypedDict
-import problem_spec
 from problem_spec import ELEMENTS, ELEMENTS_NO_LABEL, LABELS
+
+import os
+import json
+import glob
 import torch
+import itertools
+from typing import TypedDict, Iterable
 from transformers import PreTrainedTokenizer
-import config
 
 class InputData:
   def __init__(self, tokenized_sentences: list[str], sentences_words: list[str], tokenized_words: list[str], annotations: list[Annotations]):
@@ -219,7 +221,7 @@ def decode(mask: list[int]) -> tuple[int, int]:
   """
   begin = 0
   end = 0
-  for i in range(len(mask) - 1):
+  for i in range(1, len(mask) - 1):
     if mask[i] != 0:
       if begin == 0:
         begin = i
@@ -235,18 +237,16 @@ def decodeList(mask: list[int]) -> list[tuple[int, int]]:
   result = []
   begin = None
   end = None
-  for i in range(len(mask) - 1):
-    if mask[i] != 0:
+  for i in range(1, len(mask)):
+    if i != len(mask) - 1 and mask[i] != 0:
       if begin is None:
         begin = i
       end = i + 1
     else:
-      if begin != 0:
+      if begin is not None:
         result.append((begin - 1, end - 1))
         begin = None
         end = None
-  if begin != 0:
-    result.append((-1, -1))
   return result
 
 def mapLabelStrToInt(label: str) -> int:
@@ -269,14 +269,21 @@ def transformData(data: tuple[InputData, LabelData], tokenizer: PreTrainedTokeni
     inp, label = data
     encoded_input = tokenizer.encode(inp.tokenized_words)
     annotations = inp.annotations
-    bmeo_mask_list : list[list[int]]= []
+    bmeo_mask_list : list[list[int]] = []
     for elem in ELEMENTS_NO_LABEL:
       if label.is_comparative:
-        bmeo_mask_list.append(label.quintuples[0][elem][1])
+        bmeo_mask_list.append(label.aggregatedBMEO[elem])
       else:
         bmeo_mask_list.append([0] * len(encoded_input))
+    transformed_label = []
+    for quintuple in label.quintuples:
+      transformed_quintuple = []
+      for elem in ELEMENTS_NO_LABEL:
+        transformed_quintuple.append(quintuple[elem][0])
+      transformed_quintuple.append(quintuple["label"])
+      transformed_label.append(transformed_quintuple)
     return (encoded_input, annotations, 
-        label.is_comparative, bmeo_mask_list, label.quintuples[0]["label"] if label.is_comparative else -1)
+        label.is_comparative, bmeo_mask_list, transformed_label)
 
 def collate_fn(batch: list[tuple[
         list[int], list[Annotations], bool, list[list[int]], int
@@ -304,7 +311,6 @@ def toTensor(batch: tuple[
   attn_masks = torch.tensor(attn_masks, dtype=torch.bool).to(config.DEVICE)
   is_comp = torch.tensor(is_comp).to(config.DEVICE)
   elem_bmeo_masks = torch.tensor(elem_bmeo_masks).to(config.DEVICE)
-  labels = torch.tensor(labels).to(config.DEVICE)
   return input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels
 
 def transformBatch(batch: list[tuple[InputData, LabelData]], tokenizer: PreTrainedTokenizer):
@@ -312,22 +318,90 @@ def transformBatch(batch: list[tuple[InputData, LabelData]], tokenizer: PreTrain
 
 
 def part1Postprocess(result_tuple:tuple) -> list:
-  is_comparative_prob, elem_output, sentence_class_prob = result_tuple
+  is_comparative_prob, elem_output, token_embedding = result_tuple
   batch_size = len(is_comparative_prob)
   result = []
   for i in range(batch_size):
     is_comparative = bool(is_comparative_prob[i] >= 0.5)
-    elements = None
-    label = -1
-    if is_comparative:
-      elements = dict()
-      for j, elem in enumerate(problem_spec.ELEMENTS_NO_LABEL):
-        elem_masks, elem_costs = elem_output[j]
-        index = decode(elem_masks[i])
-        elements[elem] = index
-      label = int(torch.argmax(sentence_class_prob[i]))
-    result.append((is_comparative, elements, label))
+    elements = dict()
+    for j, elem in enumerate(problem_spec.ELEMENTS_NO_LABEL):
+      elem_masks, elem_costs = elem_output[j]
+      indexes = decodeList(elem_masks[i])
+      elements[elem] = indexes
+    result.append((is_comparative, elements))
   return result
+
+def probArgMax(class_prob: list[list[list[float]]]) -> list[list[int]]:
+  result = []
+  for i in range(len(class_prob)):
+    result.append([])
+    for j in range(len(class_prob[i])):
+      class_pred = torch.argmax(class_prob[i][j]).item()
+      if class_pred == len(LABELS):
+        class_pred = -1
+      result[i].append(class_pred)
+  return result
+
+def part2Postprocess(indexes: list[Iterable[tuple[tuple[int, int], ...]]], class_prob: list[list[list[float]]]) -> list[list[tuple]]:
+  collapsed_class_prob = probArgMax(class_prob)
+  result = []
+  for i in range(len(indexes)):
+    result.append([])
+    for j, index in enumerate(indexes[i]):
+      if collapsed_class_prob[i][j] == -1:
+        continue
+      result[i].append(index + (collapsed_class_prob[i][j],))
+  return result
+
+def postprocess(result: tuple, lookup: InputData) -> dict:
+  result_dict = dict()
+  for i, elem in enumerate(problem_spec.ELEMENTS_NO_LABEL):
+    elem_index = result[i]
+    elem_index = mapToOriginalIndex(elem_index, lookup.sentences_words, lookup.tokenized_words)
+    result_dict[elem] = [str(i+1)+"&&"+lookup.sentences_words[i] for i in range(elem_index[0], elem_index[1])]
+  result_dict["label"] = problem_spec.LABELS[result[-1]]
+
+
+
+def generateCandiateQuadEmbedding(candidate_quads_indexes: list[tuple[tuple[int, int],...]], token_embedding: list[list[float]]):
+  candidate_quads_embedding = []
+  for quad in candidate_quads_indexes:
+    quad_embedding = []
+    for idx in quad:
+      if idx != (-1, -1):
+        seq_embedding = token_embedding[idx[0] + 1 : idx[1] + 1, :]
+        seq_embedding = torch.mean(seq_embedding, dim=0)
+      else:
+        seq_embedding = torch.zeros(token_embedding.shape[1]).to(config.DEVICE)
+      quad_embedding.append(seq_embedding)
+    quad_embedding = torch.cat(quad_embedding)
+    candidate_quads_embedding.append(quad_embedding)
+  if len(candidate_quads_embedding) != 0:
+    candidate_quads_embedding = torch.stack(candidate_quads_embedding)
+  return candidate_quads_embedding
+
+def isOverlapping(a: tuple[int, int], b: tuple[int, int]) -> bool:
+  nulla = a == (-1, -1)
+  nullb = b == (-1, -1)
+  if nulla != nullb:
+    return False
+  if nulla and nullb:
+    return True
+  return min(a[1], b[1]) > max(a[0], b[0])
+
+def generateCandidateQuadLabel(candidate_quads_indexes: list[tuple[tuple[int, int],...]], labels: list[tuple]):
+  candidate_quads_label: list[int] = []
+  for quad in candidate_quads_indexes:
+    matches = False
+    for label in labels:
+      matches = all([isOverlapping(quad[i], label[i]) for i in range(len(quad))])
+      if matches:
+        candidate_quads_label.append(label[-1])
+        break
+    if not matches:
+      candidate_quads_label.append(len(LABELS))
+  return candidate_quads_label
+
 
 def formatResult(result: tuple[bool, dict[str, tuple[int, int]] | None, int | None], 
                  lookup: InputData) -> str | None:

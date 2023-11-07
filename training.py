@@ -3,24 +3,42 @@ import torch
 import data
 import processing
 import config
+from processing import InputData
 from transformers import AutoTokenizer
 from problem_spec import LABELS
 from metric import MetricRecord, BinaryMetric, MultiClassMetric
 
+import itertools
 
 tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
 
-def predict(model: models.BertCrfCell, sentence: str, nlptokenizer) -> str:
+def predict(model: models.BertCrfExtractor, input_data: InputData) -> tuple[bool, list[dict]]:
   global tokenizer
   model.eval()
-  processed_input = processing.mineInputSentence(sentence, nlptokenizer)
   dummy_label = processing.LabelData([])
-  batch = processing.transformBatch([(processed_input, dummy_label)], tokenizer)
-  input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
+  batch = processing.transformBatch([(input_data, dummy_label)], tokenizer)
+  # input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
 
-  outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
-  transformed_output = processing.part1Postprocess(outputs)[0]
-  return processing.formatResult(transformed_output, processed_input)
+  # outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
+  # transformed_output = processing.part1Postprocess(outputs)[0]
+
+
+  input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
+  bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
+  is_comparative_prob, elem_output, token_embedding = bertcrf_output
+  part1_output = processing.part1Postprocess(bertcrf_output)
+  
+  is_comparative, elements = part1_output[0]
+  candidate_indexes = [itertools.product(*(elements.values()))]
+  candidates = processing.generateCandiateQuadEmbedding(candidate_indexes, token_embedding[0, :, :])
+  candidates_label = processing.generateCandidateQuadLabel(candidate_indexes, label[0])
+  candidate_embedding = [candidates]
+  quads_label = [candidates_label]
+  
+  sentence_class_prob = model.classification(candidate_embedding)
+  part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)[0]
+
+  return is_comparative, [processing.postprocess(out, input_data) for out in part2_output]
 
 
 def identificationLoss(result: list[float], target: list[bool]):
@@ -49,25 +67,26 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
     sum_loss = sum_loss / (sum_positive * 4)
   return sum_loss
 
-def classificationLoss(sentence_class_prob: list[list[float]], label: list[int]):
+def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list[list[int]], ident_label: list[bool]):
   if (len(sentence_class_prob) != len(label)):
     raise Exception("sentence_class_prob's length must be equal to label's length")
-  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562]).to(config.DEVICE))
+  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 1]).to(config.DEVICE))
   batch_size = len(sentence_class_prob)
   loss = None
   sum_positive = 0
   for i in range(batch_size):
-    if label[i] != -1:
-      sum_positive += 1
-      add = ce(sentence_class_prob[i], label[i])
-      loss = loss + add if loss is not None else add
+    if bool(ident_label[i]):
+      sum_positive += len(label[i])
+      if len(sentence_class_prob[i]) != 0:
+        add = ce(sentence_class_prob[i], label[i]) * len(label[i])
+        loss = loss + add if loss is not None else add
   if loss is not None:
     loss = loss / sum_positive
   return loss
 
 
 def trainClassifier(
-    model: models.BertCrfCell, train_dataloader: data.ClassDataLoader, val_dataloader: data.ClassDataLoader | None, 
+    model: models.BertCrfExtractor, train_dataloader: data.ClassDataLoader, val_dataloader: data.ClassDataLoader | None, 
     *, epochs: int = 10, optimizer = None, metric_callback = None):
   
   optimizer = torch.optim.Adam(model.parameters(), lr=config.LR) if optimizer is None else optimizer
@@ -80,18 +99,18 @@ def trainClassifier(
       metric_callback(i, train_metric, val_metric)
 
 def trainOneEpochClassifier(
-      model: models.BertCrfCell, train_dataloader: data.ClassDataLoader,
+      model: models.BertCrfExtractor, train_dataloader: data.ClassDataLoader,
       epoch_index: int = 0, *, optimizer = None):
   return trainOneEpochOrValidateClassifier(model, train_dataloader, do_train=True, optimizer=optimizer, epoch_index=epoch_index)
 
 def validateClassifier(
-      model: models.BertCrfCell, val_dataloader: data.ClassDataLoader,
+      model: models.BertCrfExtractor, val_dataloader: data.ClassDataLoader,
       epoch_index: int = 0):
   return trainOneEpochOrValidateClassifier(model, val_dataloader, do_train=False, epoch_index=epoch_index)
 
 
 def trainOneEpochOrValidateClassifier(
-    model: models.BertCrfCell, dataloader: data.ClassDataLoader, do_train = True,
+    model: models.BertCrfExtractor, dataloader: data.ClassDataLoader, do_train = True,
     *, epoch_index: int = 0, optimizer = None):
   global tokenizer
 
@@ -106,57 +125,41 @@ def trainOneEpochOrValidateClassifier(
     batch = processing.transformBatch(raw_batch, tokenizer)
     batch_size = len(batch[0])
 
-    #
+    # evaluation
     input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
-    outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
-    is_comparative_prob, elem_output, sentence_class_prob = outputs
-    transformed_output = processing.part1Postprocess(outputs)
+    bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
+    is_comparative_prob, elem_output, token_embedding = bertcrf_output
+    part1_output = processing.part1Postprocess(bertcrf_output)
+    candidate_indexes: list[list[tuple[int, int]]] = []
+    candidate_embedding: list[list[list[list[float]]]] = []
+    quads_label: list[list[int]] = []
+    for i in range(batch_size):
+      is_comparative, elements = part1_output[i]
+      candidate_indexes.append(list(itertools.product(*(elements.values()))))
+      candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
+      candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
+      candidate_embedding.append(candidates)
+      quads_label.append(torch.tensor(candidates_label).to(config.DEVICE))
+    sentence_class_prob = model.classification(candidate_embedding)
+    part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)
     #
 
-    if batch_index == 0 and True:# epoch_index % 5 == 4:
-      print(outputs)
-      for i, out in enumerate(transformed_output):
-        print(out)
-        print(processing.formatResult(out, raw_batch[i][0]))
-      print("---")
 
-    sum_positive = int(torch.sum(is_comp))
-    
-    is_comp_corrects = 0
-    for i in range(batch_size):
-      pred = transformed_output[i][0]
-      is_correct = pred == bool(is_comp[i])
-      bin_class_metric.addSample(is_correct, pred)
-      is_comp_corrects += int(is_correct)
-    if config.LOG_PROGRESS:
-      print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
-    
-    class_corrects = 0
-    for i in range(batch_size):
-      if bool(is_comp[i]):
-        pred = transformed_output[i][2]
-        actual = int(label[i])
-        class_metrics.addSample(actual, pred)
-        class_corrects += int(pred == actual)
-    if config.LOG_PROGRESS:
-      print("class_corrects:", class_corrects, "/", sum_positive)
-
-    
+    # learning
     if do_train:
       optimizer.zero_grad()
 
-    identifcation_loss = identificationLoss(is_comparative_prob[:, 0], is_comp)
-    sum_loss += identifcation_loss.item()
-    if do_train and config.DO_TRAIN_PART1:
-      identifcation_loss.backward(retain_graph=config.DO_TRAIN_PART2)
-      
+    identification_loss = identificationLoss(is_comparative_prob[:, 0], is_comp)
     extraction_loss = extractionLoss(elem_output, is_comp)
-    classification_loss = classificationLoss(sentence_class_prob, label)
-    part2_loss = None
+      
+    part1_loss = identification_loss
     if extraction_loss is not None:
-      part2_loss = extraction_loss
-    if classification_loss is not None:
-      part2_loss = part2_loss + classification_loss if part2_loss is not None else classification_loss
+      part1_loss += extraction_loss
+    sum_loss += part1_loss.item()
+    if do_train and config.DO_TRAIN_PART1:
+      part1_loss.backward(retain_graph=config.DO_TRAIN_PART2)
+
+    part2_loss = classificationLoss(sentence_class_prob, quads_label, is_comp)
     if part2_loss is not None:
       sum_loss += part2_loss.item()
       if do_train and config.DO_TRAIN_PART2:
@@ -164,6 +167,34 @@ def trainOneEpochOrValidateClassifier(
 
     if do_train:
       optimizer.step()
+    #
+
+
+
+    # metrics and logging
+    if batch_index == 0 and True:# epoch_index % 5 == 4:
+      print(bertcrf_output)
+      for i, out in enumerate(part1_output):
+        print(out)
+      print("---")
+
+    # sum_positive = int(torch.sum(is_comp))
+    is_comp_corrects = 0
+    class_corrects = 0
+    for i in range(batch_size):
+      pred = part1_output[i][0]
+      is_correct = pred == bool(is_comp[i])
+      bin_class_metric.addSample(is_correct, pred)
+      is_comp_corrects += int(is_correct)
+      # if bool(is_comp[i]):
+      #   class_pred = part1_output[i][2]
+      #   actual = int(label[i])
+      #   class_metrics.addSample(actual, class_pred)
+      #   class_corrects += int(pred == actual)
+    if config.LOG_PROGRESS:
+      print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
+      # print("class_corrects:", class_corrects, "/", sum_positive)
+    #
  
   avg_loss = sum_loss / len(dataloader.dataset)
 

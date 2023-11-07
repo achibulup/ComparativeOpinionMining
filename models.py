@@ -58,7 +58,6 @@ class BertCrfCell(nn.Module):
     # class_embedding = self.embedding_dropout(pooled_output)
     is_comparative_prob = self.identification(pooled_output)
     element_prob = [w(token_embedding) for w in self.element_linear]
-    sentence_class_prob = self.label_from_sentence_linear(pooled_output)
     elem_output = []
     for index in range(4):
       if elem_bmeo_mask is None:
@@ -66,4 +65,26 @@ class BertCrfCell(nn.Module):
       else:
         elem_output.append((self.crf[index](element_prob[index], attn_mask), 
             self.crf[index].loss(element_prob[index], attn_mask, elem_bmeo_mask[:, index, :])))
-    return is_comparative_prob, elem_output, sentence_class_prob
+    return is_comparative_prob, elem_output, token_embedding
+
+class ClassificationCell(nn.Module):
+  def __init__(self):
+    super(ClassificationCell, self).__init__()
+    self.classification = nn.Sequential(
+      nn.Linear(BERT_HIDDEN_SIZE * 4, BERT_HIDDEN_SIZE * 2),
+      nn.Sigmoid(),
+      nn.Linear(BERT_HIDDEN_SIZE * 2, len(LABELS) + 1),
+    )
+  
+  def forward(self, candidate_quads: list[list[list[float]]]):
+    result = []
+    torch.TensorType
+    for i in range(len(candidate_quads)):
+      result.append(self.classification(candidate_quads[i]) if len(candidate_quads[i]) != 0 else [])
+    return result
+  
+class BertCrfExtractor(nn.Module):
+  def __init__(self, bertcrf_cell = None, classification_cell = None):
+    super(BertCrfExtractor, self).__init__()
+    self.bertcrf = BertCrfCell() if bertcrf_cell is None else bertcrf_cell
+    self.classification = ClassificationCell() if classification_cell is None else classification_cell
