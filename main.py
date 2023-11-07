@@ -67,7 +67,7 @@ val metric: ({val[0]}, {val[1]})
     training.trainClassifier(model, train_dataloader, val_dataloader, epochs=config.EPOCHS, metric_callback=process_metric)
 
   elif config.MODE == "result":
-    model = models.BertCrfCell().to(config.DEVICE)
+    model = models.BertCrfExtractor().to(config.DEVICE)
     if os.path.exists(config.LOAD_MODEL_PATH):
       model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
     else:
