@@ -54,7 +54,7 @@ def identificationLoss(result: list[float], target: list[bool]):
 def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_label: list[bool]):
   if (len(crf_output[0][1]) != len(identification_label)):
     raise Exception("crf_output's 2nd dimension must be equal to identification_label's length")
-  batch_size = len(crf_output)
+  batch_size = len(crf_output[0][1])
   sum_loss = None
   sum_positive = 0
   for i in range(batch_size):
