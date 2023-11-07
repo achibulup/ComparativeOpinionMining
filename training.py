@@ -172,7 +172,7 @@ def trainOneEpochOrValidateClassifier(
 
 
     # metrics and logging
-    if batch_index == 0 and True:# epoch_index % 5 == 4:
+    if batch_index == 0 and epoch_index % 10 == 5:
       print(bertcrf_output)
       for i, out in enumerate(part1_output):
         print(out)
