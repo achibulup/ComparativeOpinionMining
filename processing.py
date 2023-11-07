@@ -360,6 +360,7 @@ def postprocess(result: tuple, lookup: InputData) -> dict:
     elem_index = mapToOriginalIndex(elem_index, lookup.sentences_words, lookup.tokenized_words)
     result_dict[elem] = [str(i+1)+"&&"+lookup.sentences_words[i] for i in range(elem_index[0], elem_index[1])]
   result_dict["label"] = problem_spec.LABELS[result[-1]]
+  return result_dict
 
 
 

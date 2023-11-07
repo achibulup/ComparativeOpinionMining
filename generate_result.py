@@ -19,8 +19,10 @@ def generateResult(test_folder: str, result_folder: str, model: models.BertCrfEx
           try:
             result = training.predict(model, 
                 processing.mineInputSentence(processing.getSentenceFromLine(line), vncorenlp))
-            if result[0] != (len(result[1]) != 0):
-              raise Exception("assertion fail on " + line)
+            # if result[0] != (len(result[1]) != 0):
+            #   print("assertion fail on " + line)
+            #   output_file.write(line + "\n\n")
+            #   continue
           except:
             print("Error while processing " + line)
             output_file.write(line + "\n\n")

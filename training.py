@@ -22,21 +22,37 @@ def predict(model: models.BertCrfExtractor, input_data: InputData) -> tuple[bool
   # outputs = model(input_id, attn_mask, annotation, elem_bmeo_mask)
   # transformed_output = processing.part1Postprocess(outputs)[0]
 
-
   input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
   bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
   is_comparative_prob, elem_output, token_embedding = bertcrf_output
   part1_output = processing.part1Postprocess(bertcrf_output)
-  
-  is_comparative, elements = part1_output[0]
-  candidate_indexes = [itertools.product(*(elements.values()))]
-  candidates = processing.generateCandiateQuadEmbedding(candidate_indexes, token_embedding[0, :, :])
-  candidates_label = processing.generateCandidateQuadLabel(candidate_indexes, label[0])
-  candidate_embedding = [candidates]
-  quads_label = [candidates_label]
-  
+  candidate_indexes: list[list[tuple[int, int]]] = []
+  candidate_embedding: list[list[list[list[float]]]] = []
+  quads_label: list[list[int]] = []
+  for i in range(1):
+    is_comparative, elements = part1_output[i]
+    candidate_indexes.append(list(itertools.product(*(elements.values()))))
+    candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
+    candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
+    candidate_embedding.append(candidates)
+    quads_label.append(torch.tensor(candidates_label).to(config.DEVICE))
   sentence_class_prob = model.classification(candidate_embedding)
   part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)[0]
+
+  # input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
+  # bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
+  # is_comparative_prob, elem_output, token_embedding = bertcrf_output
+  # part1_output = processing.part1Postprocess(bertcrf_output)
+  
+  # is_comparative, elements = part1_output[0]
+  # candidate_indexes = [itertools.product(*(elements.values()))]
+  # candidates = processing.generateCandiateQuadEmbedding(candidate_indexes, token_embedding[0, :, :])
+  # candidates_label = processing.generateCandidateQuadLabel(candidate_indexes, label[0])
+  # candidate_embedding = [candidates]
+  # quads_label = [candidates_label]
+  
+  # sentence_class_prob = model.classification(candidate_embedding)
+  # part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)[0]
 
   return is_comparative, [processing.postprocess(out, input_data) for out in part2_output]
 
@@ -70,7 +86,7 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
 def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list[list[int]], ident_label: list[bool]):
   if (len(sentence_class_prob) != len(label)):
     raise Exception("sentence_class_prob's length must be equal to label's length")
-  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 1]).to(config.DEVICE))
+  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 3]).to(config.DEVICE))
   batch_size = len(sentence_class_prob)
   loss = None
   sum_positive = 0
