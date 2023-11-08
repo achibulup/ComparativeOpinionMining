@@ -76,7 +76,7 @@ val metric: ({val[0]}, {val[1]})
       generate_result.generateResult(test_data_path, result_path, model=model, vncorenlp=vncorenlp)
   elif config.MODE == "demo":
     vncorenlp = VnCoreNLP(config.VNCORENLP_JAR_PATH)
-    model = models.BertCrfCell().to(config.DEVICE)
+    model = models.BertCrfExtractor().to(config.DEVICE)
     if config.LOAD_MODEL:
       if os.path.exists(config.LOAD_MODEL_PATH):
         model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))

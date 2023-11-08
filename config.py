@@ -56,7 +56,7 @@ def loadConfig(args):
   LOG_PROGRESS = args.log_progress
   SAVE_MODEL = args.save_model
   LOAD_MODEL = args.load_model
-  if MODE == "result":
+  if MODE == "result" or MODE == "demo":
     LOAD_MODEL = True
   LOAD_MODEL_PATH = args.model_path
   if (args.load_model_path is not None):

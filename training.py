@@ -31,6 +31,9 @@ def predict(model: models.BertCrfExtractor, input_data: InputData) -> tuple[bool
   quads_label: list[list[int]] = []
   for i in range(1):
     is_comparative, elements = part1_output[i]
+    for elem, indexes in elements.items():
+      if elem == "subject" or elem == "object" or elem == "aspect":
+        indexes.append((-1, -1))
     candidate_indexes.append(list(itertools.product(*(elements.values()))))
     candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
     candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
@@ -151,6 +154,9 @@ def trainOneEpochOrValidateClassifier(
     quads_label: list[list[int]] = []
     for i in range(batch_size):
       is_comparative, elements = part1_output[i]
+      for elem, indexes in elements.items():
+        if elem == "subject" or elem == "object" or elem == "aspect":
+          indexes.append((-1, -1))
       candidate_indexes.append(list(itertools.product(*(elements.values()))))
       candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
       candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
