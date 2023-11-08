@@ -34,6 +34,7 @@ class BertCrfCell(nn.Module):
     global BERT_HIDDEN_SIZE
     super(BertCrfCell, self).__init__()
     self.bert = BertCell() if bert_model is None else bert_model
+    self.dropout = nn.Dropout(0.1)
     self.identification = nn.Sequential(
       nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE // 2),
       nn.Sigmoid(),
@@ -54,6 +55,7 @@ class BertCrfCell(nn.Module):
       annotations: Annotations, elem_bmeo_mask:list[list[list[int]]]=None):
     token_embedding, pooled_output = self.bert(input_ids, attn_mask)
     batch_size, sequence_length, _ = token_embedding.size()
+    token_embedding = self.dropout(token_embedding)
     # final_embedding = self.embedding_dropout(token_embedding)
     # class_embedding = self.embedding_dropout(pooled_output)
     is_comparative_prob = self.identification(pooled_output)
