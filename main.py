@@ -58,8 +58,8 @@ if __name__ == '__main__':
     def process_metric(epoch, train, val):
       global max_f1
       print(f"""{{Epoch {epoch}: 
-train metric: ({train[0]}, {train[1]})
-val metric: ({val[0]}, {val[1]})
+train metric: {train}
+val metric: {val}
 }}""")
       if (config.SAVE_MODEL and val[1].f1 is not None and val[1].f1 > max_f1):
         torch.save(model.state_dict(), config.SAVE_MODEL_PATH)

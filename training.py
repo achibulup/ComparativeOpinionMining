@@ -83,7 +83,7 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
         elem_pred, elem_cost = crf_output[elem]
         sum_loss = sum_loss + elem_cost[i] if sum_loss is not None else elem_cost[i]
   if sum_loss is not None:
-    sum_loss = sum_loss / (sum_positive * 4)
+    sum_loss = sum_loss / sum_positive
   return sum_loss
 
 def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list[list[int]], ident_label: list[bool]):
@@ -137,8 +137,10 @@ def trainOneEpochOrValidateClassifier(
     optimizer = torch.optim.Adam(model.parameters(), lr=config.LR)
 
   sum_loss = 0
-  bin_class_metric = BinaryMetric()
+  identify_metric = BinaryMetric()
+  extract_metrics = [0 for _ in range(4)]
   class_metrics = MultiClassMetric(len(LABELS))
+  all_positive = 0
 
   for batch_index, raw_batch in enumerate(dataloader):
     batch = processing.transformBatch(raw_batch, tokenizer)
@@ -154,10 +156,13 @@ def trainOneEpochOrValidateClassifier(
     quads_label: list[list[int]] = []
     for i in range(batch_size):
       is_comparative, elements = part1_output[i]
+      tmp = []
       for elem, indexes in elements.items():
         if elem == "subject" or elem == "object" or elem == "aspect":
-          indexes.append((-1, -1))
-      candidate_indexes.append(list(itertools.product(*(elements.values()))))
+          tmp.append(indexes + [(-1, -1)])
+        else:
+          tmp.append(indexes)
+      candidate_indexes.append(list(itertools.product(*tmp)))
       candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
       candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
       candidate_embedding.append(candidates)
@@ -194,30 +199,43 @@ def trainOneEpochOrValidateClassifier(
 
 
     # metrics and logging
-    if batch_index == 0 and epoch_index % 10 == 5:
-      print(bertcrf_output)
-      for i, out in enumerate(part1_output):
-        print(out)
-      print("---")
+    # if batch_index == 0 and epoch_index % 10 == 5:
+    #   print(bertcrf_output)
+    #   for i, out in enumerate(part1_output):
+    #     print(out)
+    #   print("---")
 
-    # sum_positive = int(torch.sum(is_comp))
+    sum_positive = int(torch.sum(is_comp))
+    all_positive += sum_positive
     is_comp_corrects = 0
+    extract_corrects = [0 for _ in range(4)]
     class_corrects = 0
     for i in range(batch_size):
-      pred = part1_output[i][0]
-      is_correct = pred == bool(is_comp[i])
-      bin_class_metric.addSample(is_correct, pred)
+      binary_pred, elems = part1_output[i]
+      is_correct = binary_pred == bool(is_comp[i])
+      identify_metric.addSample(is_correct, binary_pred)
       is_comp_corrects += int(is_correct)
-      # if bool(is_comp[i]):
+
+      if bool(is_comp[i]):
+        for j, (elem, indexes) in enumerate(elems.items()):
+          extract_target = processing.decodeList(elem_bmeo_mask[i, j, :])
+          extract_pred = elems[elem]
+          # print(extract_pred, extract_target)
+          is_correct = extract_pred == extract_target
+          extract_metrics[j] += int(is_correct)
+          extract_corrects[j] += int(is_correct)
+        
       #   class_pred = part1_output[i][2]
       #   actual = int(label[i])
       #   class_metrics.addSample(actual, class_pred)
       #   class_corrects += int(pred == actual)
     if config.LOG_PROGRESS:
       print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
+      print("extract_corrects:", extract_corrects, "/", sum_positive)
       # print("class_corrects:", class_corrects, "/", sum_positive)
     #
  
   avg_loss = sum_loss / len(dataloader.dataset)
+  extract_metrics = [m / all_positive for m in extract_metrics]
 
-  return avg_loss, bin_class_metric, class_metrics
+  return avg_loss, identify_metric, extract_metrics

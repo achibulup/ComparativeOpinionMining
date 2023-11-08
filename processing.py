@@ -238,15 +238,15 @@ def decodeList(mask: list[int]) -> list[tuple[int, int]]:
   begin = None
   end = None
   for i in range(1, len(mask)):
-    if i != len(mask) - 1 and mask[i] != 0:
-      if begin is None:
-        begin = i
-      end = i + 1
-    else:
+    if i == len(mask) - 1 or mask[i] == 0 or mask[i] == 1:
       if begin is not None:
         result.append((begin - 1, end - 1))
         begin = None
         end = None
+    if i != len(mask) - 1 and mask[i] != 0:
+      if begin is None:
+        begin = i
+      end = i + 1
   return result
 
 def mapLabelStrToInt(label: str) -> int:
@@ -342,7 +342,7 @@ def probArgMax(class_prob: list[list[list[float]]]) -> list[list[int]]:
       result[i].append(class_pred)
   return result
 
-def part2Postprocess(indexes: list[Iterable[tuple[tuple[int, int], ...]]], class_prob: list[list[list[float]]]) -> list[list[tuple]]:
+def part2Postprocess(indexes: list[list[tuple[tuple[int, int], ...]]], class_prob: list[list[list[float]]]) -> list[list[tuple]]:
   collapsed_class_prob = probArgMax(class_prob)
   result = []
   for i in range(len(indexes)):

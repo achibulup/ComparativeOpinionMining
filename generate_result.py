@@ -21,10 +21,12 @@ def generateResult(test_folder: str, result_folder: str, model: models.BertCrfEx
                 processing.mineInputSentence(processing.getSentenceFromLine(line), vncorenlp))
             if result[0] != (len(result[1]) != 0):
               print("assertion fail on " + line)
+              print(result)
             #   output_file.write(line + "\n\n")
             #   continue
-          except:
+          except Exception as e:
             print("Error while processing " + line)
+            print(e)
             output_file.write(line + "\n\n")
             continue
           output_file.write(line + "\n")
