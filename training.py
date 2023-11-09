@@ -83,7 +83,7 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
         elem_pred, elem_cost = crf_output[elem]
         sum_loss = sum_loss + elem_cost[i] if sum_loss is not None else elem_cost[i]
   if sum_loss is not None:
-    sum_loss = sum_loss / sum_positive
+    sum_loss = sum_loss / (sum_positive * 4)
   return sum_loss
 
 def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list[list[int]], ident_label: list[bool]):
