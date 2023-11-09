@@ -151,24 +151,25 @@ def trainOneEpochOrValidateClassifier(
     bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
     is_comparative_prob, elem_output, token_embedding = bertcrf_output
     part1_output = processing.part1Postprocess(bertcrf_output)
-    candidate_indexes: list[list[tuple[int, int]]] = []
-    candidate_embedding: list[list[list[list[float]]]] = []
-    quads_label: list[list[int]] = []
-    for i in range(batch_size):
-      is_comparative, elements = part1_output[i]
-      tmp = []
-      for elem, indexes in elements.items():
-        if elem == "subject" or elem == "object" or elem == "aspect":
-          tmp.append(indexes + [(-1, -1)])
-        else:
-          tmp.append(indexes)
-      candidate_indexes.append(list(itertools.product(*tmp)))
-      candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
-      candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
-      candidate_embedding.append(candidates)
-      quads_label.append(torch.tensor(candidates_label).to(config.DEVICE))
-    sentence_class_prob = model.classification(candidate_embedding)
-    part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)
+    if config.DO_TRAIN_PART2:
+      candidate_indexes: list[list[tuple[int, int]]] = []
+      candidate_embedding: list[list[list[list[float]]]] = []
+      quads_label: list[list[int]] = []
+      for i in range(batch_size):
+        is_comparative, elements = part1_output[i]
+        tmp = []
+        for elem, indexes in elements.items():
+          if elem == "subject" or elem == "object" or elem == "aspect":
+            tmp.append(indexes + [(-1, -1)])
+          else:
+            tmp.append(indexes)
+        candidate_indexes.append(list(itertools.product(*tmp)))
+        candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
+        candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
+        candidate_embedding.append(candidates)
+        quads_label.append(torch.tensor(candidates_label).to(config.DEVICE))
+      sentence_class_prob = model.classification(candidate_embedding)
+      part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)
     #
 
 
@@ -186,11 +187,12 @@ def trainOneEpochOrValidateClassifier(
     if do_train and config.DO_TRAIN_PART1:
       part1_loss.backward(retain_graph=config.DO_TRAIN_PART2)
 
-    part2_loss = classificationLoss(sentence_class_prob, quads_label, is_comp)
-    if part2_loss is not None:
-      sum_loss += part2_loss.item()
-      if do_train and config.DO_TRAIN_PART2:
-        part2_loss.backward()
+    if config.DO_TRAIN_PART2:
+      part2_loss = classificationLoss(sentence_class_prob, quads_label, is_comp)
+      if part2_loss is not None:
+        sum_loss += part2_loss.item()
+        if do_train:
+          part2_loss.backward()
 
     if do_train:
       optimizer.step()
