@@ -48,12 +48,12 @@ if __name__ == '__main__':
     val_dataloader = data.ClassDataLoader(val_dataset, 16)
 
     model = models.BertCrfExtractor().to(config.DEVICE)
-    model.bertcrf.load_state_dict(torch.load("models/bertcrf.pt", map_location=config.DEVICE))
-    # if config.LOAD_MODEL:
-    #   if os.path.exists(config.LOAD_MODEL_PATH):
-    #     model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
-    #   else:
-    #     raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
+    # model.bertcrf.load_state_dict(torch.load("models/bertcrf.pt", map_location=config.DEVICE))
+    if config.LOAD_MODEL:
+      if os.path.exists(config.LOAD_MODEL_PATH):
+        model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
+      else:
+        raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
 
     max_f1 = 0
     def process_metric(epoch, train, val):
