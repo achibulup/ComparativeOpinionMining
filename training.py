@@ -8,7 +8,9 @@ from transformers import AutoTokenizer
 from problem_spec import LABELS
 from metric import MetricRecord, BinaryMetric, MultiClassMetric
 
+import time
 import itertools
+import numpy as np
 
 tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base-v2")
 
@@ -38,7 +40,7 @@ def predict(model: models.BertCrfExtractor, input_data: InputData) -> tuple[bool
     candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
     candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
     candidate_embedding.append(candidates)
-    quads_label.append(torch.tensor(candidates_label).to(config.DEVICE))
+    quads_label.append(torch.tensor(candidates_label, device=config.DEVICE))
   sentence_class_prob = model.classification(candidate_embedding)
   part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)[0]
 
@@ -64,10 +66,10 @@ def identificationLoss(result: list[float], target: list[bool]):
   if (len(result) != len(target)):
     raise Exception("Result's length must be equal to target's length")
   batch_size = len(result)
-  weight=[]
+  weight = [None] * batch_size
   for i in range(batch_size):
-    weight.append(1.2 if target[i] else 0.8) 
-  comp_loss_fn = torch.nn.BCELoss(torch.tensor(weight).to(config.DEVICE))      
+    weight[i] = 1.2 if target[i] else 0.8
+  comp_loss_fn = torch.nn.BCELoss(torch.tensor(weight, device=config.DEVICE))      
   return comp_loss_fn(result, target.float())
 
 def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_label: list[bool]):
@@ -89,7 +91,7 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
 def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list[list[int]], ident_label: list[bool]):
   if (len(sentence_class_prob) != len(label)):
     raise Exception("sentence_class_prob's length must be equal to label's length")
-  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 1]).to(config.DEVICE))
+  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 1], device=config.DEVICE))
   batch_size = len(sentence_class_prob)
   loss = None
   sum_positive = 0
@@ -143,14 +145,21 @@ def trainOneEpochOrValidateClassifier(
   all_positive = 0
 
   for batch_index, raw_batch in enumerate(dataloader):
+    tt = time.perf_counter()
     batch = processing.transformBatch(raw_batch, tokenizer)
+    print("transformBatch:", time.perf_counter() - tt)
+    tt = time.perf_counter()
     batch_size = len(batch[0])
 
     # evaluation
     input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
     bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
     is_comparative_prob, elem_output, token_embedding = bertcrf_output
+    print("bertcrf:", time.perf_counter() - tt)
+    tt = time.perf_counter()
     part1_output = processing.part1Postprocess(bertcrf_output)
+    print("part1Postprocess:", time.perf_counter() - tt)
+    tt = time.perf_counter()
     if config.DO_TRAIN_PART2:
       candidate_indexes: list[list[tuple[int, int]]] = []
       candidate_embedding: list[list[list[list[float]]]] = []
@@ -167,9 +176,15 @@ def trainOneEpochOrValidateClassifier(
         candidates = processing.generateCandiateQuadEmbedding(candidate_indexes[i], token_embedding[i, :, :])
         candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
         candidate_embedding.append(candidates)
-        quads_label.append(torch.tensor(candidates_label).to(config.DEVICE))
+        quads_label.append(torch.tensor(candidates_label, device=config.DEVICE))
+      print("generateCandidateQuadEmbedding:", time.perf_counter() - tt)
+      tt = time.perf_counter()
       sentence_class_prob = model.classification(candidate_embedding)
+      print("classification:", time.perf_counter() - tt)
+      tt = time.perf_counter()
       part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)
+      print("part2Postprocess:", time.perf_counter() - tt)
+      tt = time.perf_counter()
     #
 
 
@@ -197,6 +212,8 @@ def trainOneEpochOrValidateClassifier(
     if do_train:
       optimizer.step()
     #
+    print("learning:", time.perf_counter() - tt)
+    tt = time.perf_counter()
 
 
 
@@ -236,6 +253,8 @@ def trainOneEpochOrValidateClassifier(
       print("extract_corrects:", extract_corrects, "/", sum_positive)
       # print("class_corrects:", class_corrects, "/", sum_positive)
     #
+    print("metrics:", time.perf_counter() - tt)
+    tt = time.perf_counter()
  
   avg_loss = sum_loss / len(dataloader.dataset)
   extract_metrics = [m / all_positive for m in extract_metrics]
