@@ -66,10 +66,11 @@ def identificationLoss(result: list[float], target: list[bool]):
   if (len(result) != len(target)):
     raise Exception("Result's length must be equal to target's length")
   batch_size = len(result)
-  weight = [None] * batch_size
-  for i in range(batch_size):
-    weight[i] = 1.2 if target[i] else 0.8
-  comp_loss_fn = torch.nn.BCELoss(torch.tensor(weight, device=config.DEVICE))      
+  weight = torch.where(target, 1.2, 0.8)
+  # weight = [None] * batch_size
+  # for i in range(batch_size):
+  #   weight[i] = 1.2 if target[i] else 0.8
+  comp_loss_fn = torch.nn.BCELoss(weight)#torch.tensor(weight, device=config.DEVICE))      
   return comp_loss_fn(result, target.float())
 
 def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_label: list[bool]):
@@ -187,13 +188,17 @@ def trainOneEpochOrValidateClassifier(
       tt = time.perf_counter()
     #
 
+    elem_bmeo_mask = elem_bmeo_mask.to("cpu")
 
     # learning
     if do_train:
       optimizer.zero_grad()
 
     identification_loss = identificationLoss(is_comparative_prob[:, 0], is_comp)
+    is_comp = is_comp.to("cpu")
     extraction_loss = extractionLoss(elem_output, is_comp)
+    print("loss:", time.perf_counter() - tt)
+    tt = time.perf_counter()
       
     part1_loss = identification_loss
     if extraction_loss is not None:
@@ -201,13 +206,17 @@ def trainOneEpochOrValidateClassifier(
     sum_loss += part1_loss.item()
     if do_train and config.DO_TRAIN_PART1:
       part1_loss.backward(retain_graph=config.DO_TRAIN_PART2)
+    print("backward:", time.perf_counter() - tt)
+
 
     if config.DO_TRAIN_PART2:
       part2_loss = classificationLoss(sentence_class_prob, quads_label, is_comp)
+      print("loss:", time.perf_counter() - tt)
       if part2_loss is not None:
         sum_loss += part2_loss.item()
         if do_train:
           part2_loss.backward()
+          print("backward:", time.perf_counter() - tt)
 
     if do_train:
       optimizer.step()
@@ -238,9 +247,8 @@ def trainOneEpochOrValidateClassifier(
       if bool(is_comp[i]):
         for j, (elem, indexes) in enumerate(elems.items()):
           extract_target = processing.decodeList(elem_bmeo_mask[i, j, :])
-          extract_pred = elems[elem]
           # print(extract_pred, extract_target)
-          is_correct = extract_pred == extract_target
+          is_correct = indexes == extract_target
           extract_metrics[j] += int(is_correct)
           extract_corrects[j] += int(is_correct)
         
@@ -248,13 +256,13 @@ def trainOneEpochOrValidateClassifier(
       #   actual = int(label[i])
       #   class_metrics.addSample(actual, class_pred)
       #   class_corrects += int(pred == actual)
+    print("metrics:", time.perf_counter() - tt)
+    tt = time.perf_counter()
     if config.LOG_PROGRESS:
       print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
       print("extract_corrects:", extract_corrects, "/", sum_positive)
       # print("class_corrects:", class_corrects, "/", sum_positive)
     #
-    print("metrics:", time.perf_counter() - tt)
-    tt = time.perf_counter()
  
   avg_loss = sum_loss / len(dataloader.dataset)
   extract_metrics = [m / all_positive for m in extract_metrics]
