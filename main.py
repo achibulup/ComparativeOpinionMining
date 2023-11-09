@@ -61,7 +61,7 @@ if __name__ == '__main__':
 train metric: ({", ".join([str(mt) for mt in train])})
 val metric: ({", ".join([str(mt) for mt in val])})
 }}""")
-      if (config.SAVE_MODEL and val[1].f1 is not None and val[1].f1 > max_f1):
+      if config.SAVE_MODEL and (config.DO_TRAIN_PART2 or val[1].f1 is not None and val[1].f1 > max_f1):
         torch.save(model.state_dict(), config.SAVE_MODEL_PATH)
         max_f1 = val[1].f1
     training.trainClassifier(model, train_dataloader, val_dataloader, epochs=config.EPOCHS, metric_callback=process_metric)
