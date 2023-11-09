@@ -145,22 +145,28 @@ def trainOneEpochOrValidateClassifier(
   class_metrics = MultiClassMetric(len(LABELS))
   all_positive = 0
 
+  tt = time.perf_counter()
+  def printPerf(name):
+    if not config.LOG_PERF:
+      return
+    nonlocal tt
+    newtt = time.perf_counter()
+    print(name, newtt - tt)
+    tt = newtt
+
   for batch_index, raw_batch in enumerate(dataloader):
     tt = time.perf_counter()
     batch = processing.transformBatch(raw_batch, tokenizer)
-    print("transformBatch:", time.perf_counter() - tt)
-    tt = time.perf_counter()
+    printPerf("transformBatch:")
     batch_size = len(batch[0])
 
     # evaluation
     input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
     bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
     is_comparative_prob, elem_output, token_embedding = bertcrf_output
-    print("bertcrf:", time.perf_counter() - tt)
-    tt = time.perf_counter()
+    printPerf("bertcrf:")
     part1_output = processing.part1Postprocess(bertcrf_output)
-    print("part1Postprocess:", time.perf_counter() - tt)
-    tt = time.perf_counter()
+    printPerf("part1Postprocess:")
     if config.DO_TRAIN_PART2:
       candidate_indexes: list[list[tuple[int, int]]] = []
       candidate_embedding: list[list[list[list[float]]]] = []
@@ -178,14 +184,11 @@ def trainOneEpochOrValidateClassifier(
         candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
         candidate_embedding.append(candidates)
         quads_label.append(torch.tensor(candidates_label, device=config.DEVICE))
-      print("generateCandidateQuadEmbedding:", time.perf_counter() - tt)
-      tt = time.perf_counter()
+      printPerf("generateCandidateQuadEmbedding:")
       sentence_class_prob = model.classification(candidate_embedding)
-      print("classification:", time.perf_counter() - tt)
-      tt = time.perf_counter()
+      printPerf("classification:")
       part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)
-      print("part2Postprocess:", time.perf_counter() - tt)
-      tt = time.perf_counter()
+      printPerf("part2Postprocess:")
     #
 
     elem_bmeo_mask = elem_bmeo_mask.to("cpu")
@@ -197,8 +200,7 @@ def trainOneEpochOrValidateClassifier(
     identification_loss = identificationLoss(is_comparative_prob[:, 0], is_comp)
     is_comp = is_comp.to("cpu")
     extraction_loss = extractionLoss(elem_output, is_comp)
-    print("loss:", time.perf_counter() - tt)
-    tt = time.perf_counter()
+    printPerf("loss:")
       
     part1_loss = identification_loss
     if extraction_loss is not None:
@@ -206,23 +208,22 @@ def trainOneEpochOrValidateClassifier(
     sum_loss += part1_loss.item()
     if do_train and config.DO_TRAIN_PART1:
       part1_loss.backward(retain_graph=config.DO_TRAIN_PART2)
-    print("backward:", time.perf_counter() - tt)
+    printPerf("backward:")
 
 
     if config.DO_TRAIN_PART2:
       part2_loss = classificationLoss(sentence_class_prob, quads_label, is_comp)
-      print("loss:", time.perf_counter() - tt)
+      printPerf("loss:")
       if part2_loss is not None:
         sum_loss += part2_loss.item()
         if do_train:
           part2_loss.backward()
-          print("backward:", time.perf_counter() - tt)
+          printPerf("backward:")
 
     if do_train:
       optimizer.step()
     #
-    print("learning:", time.perf_counter() - tt)
-    tt = time.perf_counter()
+    printPerf("learning:")
 
 
 
@@ -256,8 +257,7 @@ def trainOneEpochOrValidateClassifier(
       #   actual = int(label[i])
       #   class_metrics.addSample(actual, class_pred)
       #   class_corrects += int(pred == actual)
-    print("metrics:", time.perf_counter() - tt)
-    tt = time.perf_counter()
+    printPerf("metrics:")
     if config.LOG_PROGRESS:
       print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
       print("extract_corrects:", extract_corrects, "/", sum_positive)

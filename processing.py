@@ -307,10 +307,10 @@ def toTensor(batch: tuple[
         list[list[int]], list[list[int]], list[list[Annotations]], list[bool], list[list[list[int]]], list[int]
     ]):
   input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels = batch
-  input_ids = torch.tensor(input_ids).to(config.DEVICE)
-  attn_masks = torch.tensor(attn_masks, dtype=torch.bool).to(config.DEVICE)
-  is_comp = torch.tensor(is_comp).to(config.DEVICE)
-  elem_bmeo_masks = torch.tensor(elem_bmeo_masks).to(config.DEVICE)
+  input_ids = torch.tensor(input_ids, device=config.DEVICE)
+  attn_masks = torch.tensor(attn_masks, dtype=torch.bool, device=config.DEVICE)
+  is_comp = torch.tensor(is_comp, device=config.DEVICE)
+  elem_bmeo_masks = torch.tensor(elem_bmeo_masks, device=config.DEVICE)
   return input_ids, attn_masks, annotations, is_comp, elem_bmeo_masks, labels
 
 def transformBatch(batch: list[tuple[InputData, LabelData]], tokenizer: PreTrainedTokenizer):
@@ -320,7 +320,7 @@ def transformBatch(batch: list[tuple[InputData, LabelData]], tokenizer: PreTrain
 def part1Postprocess(result_tuple:tuple) -> list:
   is_comparative_prob, elem_output, token_embedding = result_tuple
   batch_size = len(is_comparative_prob)
-  result = []
+  result = [None] * batch_size
   for i in range(batch_size):
     is_comparative = bool(is_comparative_prob[i] >= 0.5)
     elements = dict()
@@ -328,7 +328,7 @@ def part1Postprocess(result_tuple:tuple) -> list:
       elem_masks, elem_costs = elem_output[j]
       indexes = decodeList(elem_masks[i])
       elements[elem] = indexes
-    result.append((is_comparative, elements))
+    result[i] = (is_comparative, elements)
   return result
 
 def probArgMax(class_prob: list[list[list[float]]]) -> list[list[int]]:
@@ -367,13 +367,13 @@ def postprocess(result: tuple, lookup: InputData) -> dict:
 def generateCandiateQuadEmbedding(candidate_quads_indexes: list[tuple[tuple[int, int],...]], token_embedding: list[list[float]]):
   candidate_quads_embedding = []
   for quad in candidate_quads_indexes:
-    quad_embedding = []
+    quad_embedding = []#token_embedding[0, :]]
     for idx in quad:
       if idx != (-1, -1):
         seq_embedding = token_embedding[idx[0] + 1 : idx[1] + 1, :]
         seq_embedding = torch.mean(seq_embedding, dim=0)
       else:
-        seq_embedding = torch.zeros(token_embedding.shape[1]).to(config.DEVICE)
+        seq_embedding = torch.zeros(token_embedding.shape[1], device=config.DEVICE)
       quad_embedding.append(seq_embedding)
     quad_embedding = torch.cat(quad_embedding)
     candidate_quads_embedding.append(quad_embedding)

@@ -20,7 +20,7 @@ if __name__ == '__main__':
   np.random.seed(config.SEED)
 
   train_data_path = config.DATA_PATH + "train/" + ("train_0001.txt" if config.IS_PROTOTYPE else "")
-  val_data_path = config.DATA_PATH + "val/" + ("dev_0001.txt" if config.IS_PROTOTYPE else "")
+  val_data_path = config.DATA_PATH + "val/" + ("dev_0001.txt" if config.IS_PROTOTYPE or config.LIGHT_VAL else "")
   test_data_path = config.DATA_PATH + "test/" + ("test_0001.txt" if config.IS_PROTOTYPE else "")
   result_path = config.DATA_PATH + "result/"
   
@@ -48,11 +48,12 @@ if __name__ == '__main__':
     val_dataloader = data.ClassDataLoader(val_dataset, 16)
 
     model = models.BertCrfExtractor().to(config.DEVICE)
-    if config.LOAD_MODEL:
-      if os.path.exists(config.LOAD_MODEL_PATH):
-        model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
-      else:
-        raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
+    model.bertcrf.load_state_dict(torch.load("models/bertcrf.pt", map_location=config.DEVICE))
+    # if config.LOAD_MODEL:
+    #   if os.path.exists(config.LOAD_MODEL_PATH):
+    #     model.load_state_dict(torch.load(config.LOAD_MODEL_PATH, map_location=config.DEVICE))
+    #   else:
+    #     raise Exception("Model path: " + config.LOAD_MODEL_PATH + " does not exist")
 
     max_f1 = 0
     def process_metric(epoch, train, val):
