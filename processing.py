@@ -367,7 +367,7 @@ def postprocess(result: tuple, lookup: InputData) -> dict:
 def generateCandiateQuadEmbedding(candidate_quads_indexes: list[tuple[tuple[int, int],...]], token_embedding: list[list[float]]):
   candidate_quads_embedding = []
   for quad in candidate_quads_indexes:
-    quad_embedding = []#token_embedding[0, :]]
+    quad_embedding = [token_embedding[0, :]]
     for idx in quad:
       if idx != (-1, -1):
         seq_embedding = token_embedding[idx[0] + 1 : idx[1] + 1, :]

@@ -73,7 +73,7 @@ class ClassificationCell(nn.Module):
   def __init__(self):
     super(ClassificationCell, self).__init__()
     self.classification = nn.Sequential(
-      nn.Linear(BERT_HIDDEN_SIZE * 4, BERT_HIDDEN_SIZE * 2),
+      nn.Linear(BERT_HIDDEN_SIZE * 5, BERT_HIDDEN_SIZE * 2),
       nn.Sigmoid(),
       nn.Linear(BERT_HIDDEN_SIZE * 2, len(LABELS) + 1),
     )
