@@ -80,7 +80,7 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
   sum_loss = None
   sum_positive = 0
   for i in range(batch_size):
-    if identification_label[i]:
+    # if identification_label[i]:
       sum_positive += 1
       for elem in range(4):
         elem_pred, elem_cost = crf_output[elem]
@@ -92,15 +92,16 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
 def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list[list[int]], ident_label: list[bool]):
   if (len(sentence_class_prob) != len(label)):
     raise Exception("sentence_class_prob's length must be equal to label's length")
-  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 1], device=config.DEVICE))
+  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 0.8], device=config.DEVICE))
   batch_size = len(sentence_class_prob)
   loss = None
   sum_positive = 0
   for i in range(batch_size):
-    if bool(ident_label[i]):
-      sum_positive += len(label[i])
+    # if bool(ident_label[i]):
+      sum_positive += len(label[i]) * int(ident_label[i])
+      scale = 1 if ident_label[i] else 0.4
       if len(sentence_class_prob[i]) != 0:
-        add = ce(sentence_class_prob[i], label[i]) * len(label[i])
+        add = ce(sentence_class_prob[i], label[i]) * scale
         loss = loss + add if loss is not None else add
   if loss is not None:
     loss = loss / sum_positive
@@ -142,7 +143,7 @@ def trainOneEpochOrValidateClassifier(
   sum_loss = 0
   identify_metric = BinaryMetric()
   extract_metrics = [0 for _ in range(4)]
-  class_metrics = MultiClassMetric(len(LABELS))
+  class_metrics = MultiClassMetric(len(LABELS) + 1)
   all_positive = 0
 
   tt = time.perf_counter()
@@ -151,22 +152,22 @@ def trainOneEpochOrValidateClassifier(
       return
     nonlocal tt
     newtt = time.perf_counter()
-    print(name, newtt - tt)
+    print(name + ": ", newtt - tt)
     tt = newtt
 
   for batch_index, raw_batch in enumerate(dataloader):
     tt = time.perf_counter()
     batch = processing.transformBatch(raw_batch, tokenizer)
-    printPerf("transformBatch:")
+    printPerf("transformBatch")
     batch_size = len(batch[0])
 
     # evaluation
     input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
     bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
     is_comparative_prob, elem_output, token_embedding = bertcrf_output
-    printPerf("bertcrf:")
+    printPerf("bertcrf")
     part1_output = processing.part1Postprocess(bertcrf_output)
-    printPerf("part1Postprocess:")
+    printPerf("part1Postprocess")
     if config.DO_TRAIN_PART2:
       candidate_indexes: list[list[tuple[int, int]]] = []
       candidate_embedding: list[list[list[list[float]]]] = []
@@ -184,11 +185,11 @@ def trainOneEpochOrValidateClassifier(
         candidates_label = processing.generateCandidateQuadLabel(candidate_indexes[i], label[i])
         candidate_embedding.append(candidates)
         quads_label.append(torch.tensor(candidates_label, device=config.DEVICE))
-      printPerf("generateCandidateQuadEmbedding:")
+      printPerf("generateCandidateQuadEmbedding")
       sentence_class_prob = model.classification(candidate_embedding)
-      printPerf("classification:")
-      part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob)
-      printPerf("part2Postprocess:")
+      printPerf("classification")
+      part2_output = processing.part2Postprocess(candidate_indexes, sentence_class_prob, keep_negative=True)
+      printPerf("part2Postprocess")
     #
 
     elem_bmeo_mask = elem_bmeo_mask.to("cpu")
@@ -200,7 +201,7 @@ def trainOneEpochOrValidateClassifier(
     identification_loss = identificationLoss(is_comparative_prob[:, 0], is_comp)
     is_comp = is_comp.to("cpu")
     extraction_loss = extractionLoss(elem_output, is_comp)
-    printPerf("loss:")
+    printPerf("loss")
       
     part1_loss = identification_loss
     if extraction_loss is not None:
@@ -208,22 +209,22 @@ def trainOneEpochOrValidateClassifier(
     sum_loss += part1_loss.item()
     if do_train and config.DO_TRAIN_PART1:
       part1_loss.backward(retain_graph=config.DO_TRAIN_PART2)
-    printPerf("backward:")
+    printPerf("backward")
 
 
     if config.DO_TRAIN_PART2:
       part2_loss = classificationLoss(sentence_class_prob, quads_label, is_comp)
-      printPerf("loss:")
+      printPerf("loss")
       if part2_loss is not None:
         sum_loss += part2_loss.item()
         if do_train:
           part2_loss.backward()
-          printPerf("backward:")
+          printPerf("backward")
 
     if do_train:
       optimizer.step()
     #
-    printPerf("learning:")
+    printPerf("learning")
 
 
 
@@ -239,6 +240,7 @@ def trainOneEpochOrValidateClassifier(
     is_comp_corrects = 0
     extract_corrects = [0 for _ in range(4)]
     class_corrects = 0
+    sum_quads = 0
     for i in range(batch_size):
       binary_pred, elems = part1_output[i]
       is_correct = binary_pred == bool(is_comp[i])
@@ -252,19 +254,20 @@ def trainOneEpochOrValidateClassifier(
           is_correct = indexes == extract_target
           extract_metrics[j] += int(is_correct)
           extract_corrects[j] += int(is_correct)
-        
-      #   class_pred = part1_output[i][2]
-      #   actual = int(label[i])
-      #   class_metrics.addSample(actual, class_pred)
-      #   class_corrects += int(pred == actual)
-    printPerf("metrics:")
+      
+
+      sum_quads += len(quads_label[i])
+      for pred, actual in zip(part2_output[i], quads_label[i]):
+        class_metrics.addSample(actual, pred[-1])
+        class_corrects += int(pred[-1] == actual)
+    printPerf("metrics")
     if config.LOG_PROGRESS:
-      print("is_comp_corrects:", is_comp_corrects, "/", batch_size)
-      print("extract_corrects:", extract_corrects, "/", sum_positive)
-      # print("class_corrects:", class_corrects, "/", sum_positive)
+      print("is_comp_corrects", is_comp_corrects, "/", batch_size)
+      print("extract_corrects", extract_corrects, "/", sum_positive)
+      print("class_corrects", class_corrects, "/", sum_quads)
     #
  
   avg_loss = sum_loss / len(dataloader.dataset)
   extract_metrics = [m / all_positive for m in extract_metrics]
 
-  return avg_loss, identify_metric, extract_metrics
+  return avg_loss, identify_metric, extract_metrics, class_metrics
