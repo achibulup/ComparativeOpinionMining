@@ -1,26 +1,26 @@
 import torch
 import argparse
 
-IS_PROTOTYPE: bool
-LIGHT_VAL: bool
-MODE: str
-DO_TRAIN_PART1: bool
-DO_TRAIN_PART2: bool
-BATCH_SIZE: int
-EPOCHS: int
-SEED: int
-POSTIVE_RATE: float
-LOG_PROGRESS: bool
-LOG_PERF: bool
-LR: float
-BINARY_WEIGHT: float
-VNCORENLP_JAR_PATH: str
-DATA_PATH: str
-DEVICE: torch.device
-SAVE_MODEL: bool
-LOAD_MODEL: bool
-LOAD_MODEL_PATH: str
-SAVE_MODEL_PATH: str
+IS_PROTOTYPE: bool = False
+LIGHT_VAL: bool = False
+MODE: str = "train"
+DO_TRAIN_PART1: bool = True
+DO_TRAIN_PART2: bool = True
+BATCH_SIZE: int = 16
+EPOCHS: int = 20
+SEED: int = 999
+POSTIVE_RATE: float = 0.4
+LOG_PROGRESS: bool = True
+LOG_PERF: bool = False
+LR: float = 0.001
+BINARY_WEIGHT: float = 1.2/0.8
+VNCORENLP_JAR_PATH: str = "dependencies/VnCoreNLP/VnCoreNLP.jar"
+DATA_PATH: str = "data/VLSP2023/"
+DEVICE: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+SAVE_MODEL: bool = True
+LOAD_MODEL: bool = False
+LOAD_MODEL_PATH: str = "models/model.pt"
+SAVE_MODEL_PATH: str = "models/model.pt"
 
 def makeParser():
   parser = argparse.ArgumentParser()
@@ -60,10 +60,12 @@ def loadConfig(args):
   SEED = args.seed
   LOG_PROGRESS = args.log_progress
   LOG_PERF = args.log_perf
-  SAVE_MODEL = args.save_model
   LOAD_MODEL = args.load_model
-  if MODE == "result" or MODE == "demo":
+  SAVE_MODEL = args.save_model
+  if MODE == "result" or MODE == "demo" or args.load_model_path is not None:
     LOAD_MODEL = True
+  if args.save_model_path is not None:
+    SAVE_MODEL = True
   LOAD_MODEL_PATH = args.model_path
   if (args.load_model_path is not None):
     LOAD_MODEL_PATH = args.load_model_path
