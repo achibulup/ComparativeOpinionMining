@@ -334,21 +334,18 @@ def part1Postprocess(result_tuple:tuple) -> list:
 def probArgMax(class_prob: list[list[list[float]]]) -> list[list[int]]:
   result = []
   for i in range(len(class_prob)):
-    result.append([])
-    for j in range(len(class_prob[i])):
-      class_pred = torch.argmax(class_prob[i][j]).item()
-      if class_pred == len(LABELS):
-        class_pred = -1
-      result[i].append(class_pred)
+    class_pred = torch.argmax(class_prob[i], dim=1).tolist()
+    result.append(class_pred)
   return result
 
-def part2Postprocess(indexes: list[list[tuple[tuple[int, int], ...]]], class_prob: list[list[list[float]]]) -> list[list[tuple]]:
+def part2Postprocess(indexes: list[list[tuple[tuple[int, int], ...]]], 
+                     class_prob: list[list[list[float]]], keep_negative=False) -> list[list[tuple]]:
   collapsed_class_prob = probArgMax(class_prob)
   result = []
   for i in range(len(indexes)):
     result.append([])
     for j, index in enumerate(indexes[i]):
-      if collapsed_class_prob[i][j] == -1:
+      if not keep_negative and collapsed_class_prob[i][j] == len(LABELS):
         continue
       result[i].append(index + (collapsed_class_prob[i][j],))
   return result
@@ -379,6 +376,8 @@ def generateCandiateQuadEmbedding(candidate_quads_indexes: list[tuple[tuple[int,
     candidate_quads_embedding.append(quad_embedding)
   if len(candidate_quads_embedding) != 0:
     candidate_quads_embedding = torch.stack(candidate_quads_embedding)
+  else:
+    candidate_quads_embedding = torch.zeros((0, token_embedding.shape[1] * 5), device=config.DEVICE)
   return candidate_quads_embedding
 
 def isOverlapping(a: tuple[int, int], b: tuple[int, int]) -> bool:

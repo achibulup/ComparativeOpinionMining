@@ -82,7 +82,7 @@ class ClassificationCell(nn.Module):
     result = []
     torch.TensorType
     for i in range(len(candidate_quads)):
-      result.append(self.classification(candidate_quads[i]) if len(candidate_quads[i]) != 0 else [])
+      result.append(self.classification(candidate_quads[i]))
     return result
   
 class BertCrfExtractor(nn.Module):
