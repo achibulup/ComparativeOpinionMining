@@ -92,7 +92,7 @@ def extractionLoss(crf_output: list[tuple[list, list[int]]], identification_labe
 def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list[list[int]], ident_label: list[bool]):
   if (len(sentence_class_prob) != len(label)):
     raise Exception("sentence_class_prob's length must be equal to label's length")
-  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 0.8], device=config.DEVICE))
+  ce = torch.nn.CrossEntropyLoss(weight=torch.tensor([0.0967, 0.4514, 1.1151, 0.2872, 0.0610, 4.7393, 6.3191, 0.2562, 0.1], device=config.DEVICE))
   batch_size = len(sentence_class_prob)
   loss = None
   sum_positive = 0
@@ -103,9 +103,11 @@ def classificationLoss(sentence_class_prob: list[list[list[float]]], label: list
       if len(sentence_class_prob[i]) != 0:
         add = ce(sentence_class_prob[i], label[i]) * scale
         loss = loss + add if loss is not None else add
-  if loss is not None:
+  if loss is not None and sum_positive != 0:
     loss = loss / sum_positive
-  return loss
+    return loss
+  else:
+    return None
 
 
 def trainClassifier(
