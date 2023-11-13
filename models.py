@@ -77,7 +77,7 @@ class ClassificationCell(nn.Module):
       nn.Sigmoid(),
       nn.Linear(64, 10),
       nn.Sigmoid(),
-      nn.linear(10, len(LABELS) + 1)
+      nn.Linear(10, len(LABELS) + 1)
     )
   
   def forward(self, candidate_quads: list[list[list[float]]]):
