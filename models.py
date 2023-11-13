@@ -36,9 +36,9 @@ class BertCrfCell(nn.Module):
     self.bert = BertCell() if bert_model is None else bert_model
     # self.dropout = nn.Dropout(0.1)
     self.identification = nn.Sequential(
-      nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE // 2),
+      nn.Linear(BERT_HIDDEN_SIZE, 32),
       nn.Sigmoid(),
-      nn.Linear(BERT_HIDDEN_SIZE // 2, 1),
+      nn.Linear(32, 1),
       nn.Sigmoid()
     )
     self.element_linear = nn.ModuleList()
@@ -48,7 +48,7 @@ class BertCrfCell(nn.Module):
       torch.nn.Linear(BERT_HIDDEN_SIZE, len(LABELS)),
     )
     self.crf = nn.ModuleList()
-    for i in range(4):
+    for i in range(len(ELEMENTS_NO_LABEL)):
       self.crf.append(CRFCell(len("BMEO")))
 
   def forward(self, input_ids: list[list[int]], attn_mask: list[list[int]], 
@@ -61,7 +61,7 @@ class BertCrfCell(nn.Module):
     is_comparative_prob = self.identification(pooled_output)
     element_prob = [w(token_embedding) for w in self.element_linear]
     elem_output = []
-    for index in range(4):
+    for index in range(len(ELEMENTS_NO_LABEL)):
       if elem_bmeo_mask is None:
         elem_output.append((self.crf[index](element_prob[index], attn_mask), None))
       else:
@@ -73,9 +73,11 @@ class ClassificationCell(nn.Module):
   def __init__(self):
     super(ClassificationCell, self).__init__()
     self.classification = nn.Sequential(
-      nn.Linear(BERT_HIDDEN_SIZE * 5, BERT_HIDDEN_SIZE * 2),
+      nn.Linear(BERT_HIDDEN_SIZE * 5, 64),
       nn.Sigmoid(),
-      nn.Linear(BERT_HIDDEN_SIZE * 2, len(LABELS) + 1),
+      nn.Linear(64, 10),
+      nn.Sigmoid(),
+      nn.linear(10, len(LABELS) + 1)
     )
   
   def forward(self, candidate_quads: list[list[list[float]]]):
