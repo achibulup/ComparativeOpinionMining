@@ -36,9 +36,9 @@ class BertCrfCell(nn.Module):
     self.bert = BertCell() if bert_model is None else bert_model
     # self.dropout = nn.Dropout(0.1)
     self.identification = nn.Sequential(
-      nn.Linear(BERT_HIDDEN_SIZE, 32),
+      nn.Linear(BERT_HIDDEN_SIZE, BERT_HIDDEN_SIZE // 2),
       nn.Sigmoid(),
-      nn.Linear(32, 1),
+      nn.Linear(BERT_HIDDEN_SIZE // 2, 1),
       nn.Sigmoid()
     )
     self.element_linear = nn.ModuleList()
