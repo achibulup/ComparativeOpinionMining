@@ -133,6 +133,12 @@ def validateClassifier(
       epoch_index: int = 0):
   return trainOneEpochOrValidateClassifier(model, val_dataloader, do_train=False, epoch_index=epoch_index)
 
+class DummyContextManager:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
 
 def trainOneEpochOrValidateClassifier(
     model: models.BertCrfExtractor, dataloader: data.ClassDataLoader, do_train = True,
@@ -164,7 +170,7 @@ def trainOneEpochOrValidateClassifier(
     printPerf("transformBatch")
     batch_size = len(batch[0])
 
-    with torch.autograd.detect_anomaly():
+    with torch.autograd.detect_anomaly() if False else DummyContextManager():
       # evaluation
       input_id, attn_mask, annotation, is_comp, elem_bmeo_mask, label = batch
       bertcrf_output = model.bertcrf(input_id, attn_mask, annotation, elem_bmeo_mask)
