@@ -145,7 +145,8 @@ def trainOneEpochOrValidateClassifier(
   sum_loss = 0
   identify_metric = BinaryMetric()
   extract_metrics = [0 for _ in range(4)]
-  class_metrics = MultiClassMetric(len(LABELS) + 1)
+  class_metrics = MultiClassMetric(len(LABELS) + 1) if config.DO_TRAIN_PART2 else None
+
   all_positive = 0
 
   tt = time.perf_counter()
@@ -267,7 +268,8 @@ def trainOneEpochOrValidateClassifier(
       if config.LOG_PROGRESS:
         print("is_comp_corrects", is_comp_corrects, "/", batch_size)
         print("extract_corrects", extract_corrects, "/", sum_positive)
-        print("class_corrects", class_corrects, "/", sum_quads)
+        if config.DO_TRAIN_PART2:
+          print("class_corrects", class_corrects, "/", sum_quads)
       #
  
   avg_loss = sum_loss / len(dataloader.dataset)
