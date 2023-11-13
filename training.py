@@ -258,11 +258,11 @@ def trainOneEpochOrValidateClassifier(
             extract_metrics[j] += int(is_correct)
             extract_corrects[j] += int(is_correct)
         
-
-        sum_quads += len(quads_label[i])
-        for pred, actual in zip(part2_output[i], quads_label[i]):
-          class_metrics.addSample(actual, pred[-1])
-          class_corrects += int(pred[-1] == actual)
+        if config.DO_TRAIN_PART2:
+          sum_quads += len(quads_label[i])
+          for pred, actual in zip(part2_output[i], quads_label[i]):
+            class_metrics.addSample(actual, pred[-1])
+            class_corrects += int(pred[-1] == actual) 
       printPerf("metrics")
       if config.LOG_PROGRESS:
         print("is_comp_corrects", is_comp_corrects, "/", batch_size)
